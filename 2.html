@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cantus Pro - Plein Écran</title>
+    <title>Cantus Pro - Lecteur de Partitions</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
@@ -75,30 +75,20 @@
         }
 
         #pdf-viewport {
-            position: relative; 
-            width: 100vw; 
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            position: relative; width: 100vw; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
             overflow: hidden;
         }
 
-        canvas {
-            display: block;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
+        canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
 
-        .tap-zone {
-            position: absolute; top: 0; height: 100%; width: 20%;
-            z-index: 100;
-        }
+        .tap-zone { position: absolute; top: 0; height: 100%; width: 20%; z-index: 100; }
         .tap-left { left: 0; }
         .tap-right { right: 0; }
 
         #perf-toolbar {
             position: absolute; top: 0; width: 100%;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
             padding: 10px 20px; display: flex; justify-content: space-between;
             align-items: center; z-index: 200;
             transform: translateY(-100%);
@@ -114,7 +104,6 @@
         .col { background: var(--surface-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; }
         .list-box { flex: 1; overflow-y: auto; border: 1px solid #333; border-radius: 8px; margin-top: 10px; }
         .item { padding: 12px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .item:active { background: #222; }
     </style>
 </head>
 <body>
@@ -133,7 +122,7 @@
 
 <div id="performance-mode">
     <div id="perf-toolbar">
-        <button class="btn btn-primary" onclick="exitPerformance()"><i class="fas fa-arrow-left"></i></button>
+        <button class="btn btn-primary" onclick="exitPerformance()"><i class="fas fa-arrow-left"></i> Quitter</button>
         <div style="text-align: center">
             <div id="perf-song-name" style="font-weight:bold; font-size:1.1rem">Chant</div>
             <div id="perf-page-count" style="font-size:0.8rem; color:#aaa">Page 1 / 1</div>
@@ -149,7 +138,7 @@
 </div>
 
 <script>
-    // --- CONFIG ---
+    // --- CONFIG (À REMPLACER) ---
     const GITHUB_USER = 'Cyprdu'; 
     const GITHUB_REPO = 'messe';
     const GITHUB_PATH = 'partitions';
@@ -201,7 +190,13 @@
     }
 
     function renderList(list) {
-        return list.map(s => `<div class="song-card"><span>${s.name}</span><button class="btn btn-primary" onclick="playSingle('${s.id}')"><i class="fas fa-play"></i></button></div>`).join('');
+        return list.map(s => `
+            <div class="song-card">
+                <span>${s.name}</span>
+                <button class="btn btn-primary" onclick="playSingle('${s.id}')">
+                    <i class="fas fa-play"></i> Lire
+                </button>
+            </div>`).join('');
     }
 
     function renderMesses() {
@@ -210,12 +205,96 @@
                 <span><strong>${m.name}</strong> (${m.songs.length} titres)</span>
                 <div style="display:flex; gap:8px">
                     <button class="btn" onclick="editMesse(${i})"><i class="fas fa-edit"></i></button>
-                    <button class="btn btn-accent" onclick="startMesse(${i})"><i class="fas fa-play"></i></button>
+                    <button class="btn btn-accent" onclick="startPerformance(state.messes[${i}].songs)"><i class="fas fa-play"></i></button>
                 </div>
             </div>`).join('');
     }
 
-    // --- LOGIQUE ÉDITION ---
+    // --- RECHERCHE ---
+    function searchSongs(query) {
+        const filtered = state.songs.filter(s => s.name.toLowerCase().includes(query.toLowerCase()));
+        document.getElementById('lib-list').innerHTML = renderList(filtered);
+    }
+
+    // --- LECTURE UNIQUE ---
+    function playSingle(id) {
+        const song = state.songs.find(s => s.id === id);
+        if (song) startPerformance([song]);
+    }
+
+    // --- MOTEUR DE PERFORMANCE ---
+    async function startPerformance(setlist) {
+        state.activeSet = setlist;
+        state.currentIdx = 0;
+        
+        // Passer en plein écran
+        const el = document.documentElement;
+        if (el.requestFullscreen) el.requestFullscreen();
+        
+        document.getElementById('performance-mode').style.display = 'flex';
+        await loadDoc(state.activeSet[0].url);
+    }
+
+    async function loadDoc(url) {
+        document.getElementById('perf-song-name').innerText = state.activeSet[state.currentIdx].name;
+        state.pdf = await pdfjsLib.getDocument(url).promise;
+        state.pageNum = 1;
+        renderPage();
+    }
+
+    async function renderPage() {
+        const page = await state.pdf.getPage(state.pageNum);
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const unscaledViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(window.innerWidth / unscaledViewport.width, window.innerHeight / unscaledViewport.height);
+        const viewport = page.getViewport({ scale: scale * window.devicePixelRatio });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = (viewport.width / window.devicePixelRatio) + "px";
+        canvas.style.height = (viewport.height / window.devicePixelRatio) + "px";
+
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        document.getElementById('perf-page-count').innerText = 
+            `Chant ${state.currentIdx + 1}/${state.activeSet.length} • Page ${state.pageNum}/${state.pdf.numPages}`;
+    }
+
+    function nextPage(e) {
+        if(e) e.stopPropagation();
+        if(state.pageNum < state.pdf.numPages) {
+            state.pageNum++; renderPage();
+        } else if(state.currentIdx < state.activeSet.length - 1) {
+            state.currentIdx++; loadDoc(state.activeSet[state.currentIdx].url);
+        }
+    }
+
+    function prevPage(e) {
+        if(e) e.stopPropagation();
+        if(state.pageNum > 1) {
+            state.pageNum--; renderPage();
+        } else if(state.currentIdx > 0) {
+            state.currentIdx--; loadDoc(state.activeSet[state.currentIdx].url);
+        }
+    }
+
+    function handleCenterTap(e) {
+        document.getElementById('performance-mode').classList.toggle('show-ui');
+    }
+
+    function exitPerformance() {
+        if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+        document.getElementById('performance-mode').style.display = 'none';
+        state.pdf = null;
+    }
+
+    // --- GESTION MESSES ---
+    function newMesse() { 
+        const n = prompt("Nom de la Messe :"); 
+        if(n) { state.messes.push({name: n, songs: []}); save(); showView('planner'); }
+    }
+
     function editMesse(idx) {
         state.currentMesseIdx = idx;
         const m = state.messes[idx];
@@ -256,82 +335,9 @@
         save(); editMesse(state.currentMesseIdx);
     }
 
-    // --- LOGIQUE PLEIN ÉCRAN & LECTURE ---
-    async function startMesse(idx) {
-        state.activeSet = state.messes[idx].songs;
-        if(state.activeSet.length === 0) return;
-        
-        const el = document.documentElement;
-        if (el.requestFullscreen) el.requestFullscreen();
-        
-        document.getElementById('performance-mode').style.display = 'flex';
-        state.currentIdx = 0;
-        await loadDoc(state.activeSet[0].url);
-    }
-
-    async function loadDoc(url) {
-        document.getElementById('perf-song-name').innerText = state.activeSet[state.currentIdx].name;
-        state.pdf = await pdfjsLib.getDocument(url).promise;
-        state.pageNum = 1;
-        renderPage();
-    }
-
-    async function renderPage() {
-        const page = await state.pdf.getPage(state.pageNum);
-        const canvas = document.getElementById('pdf-canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Calcul du plein écran intelligent (Best Fit)
-        const unscaledViewport = page.getViewport({ scale: 1 });
-        const scale = Math.min(window.innerWidth / unscaledViewport.width, window.innerHeight / unscaledViewport.height);
-        const viewport = page.getViewport({ scale: scale * window.devicePixelRatio });
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.style.width = (viewport.width / window.devicePixelRatio) + "px";
-        canvas.style.height = (viewport.height / window.devicePixelRatio) + "px";
-
-        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-        document.getElementById('perf-page-count').innerText = `Titre ${state.currentIdx + 1} / ${state.activeSet.length} • Page ${state.pageNum} / ${state.pdf.numPages}`;
-    }
-
-    function nextPage(e) {
-        if(e) e.stopPropagation();
-        if(state.pageNum < state.pdf.numPages) {
-            state.pageNum++; renderPage();
-        } else if(state.currentIdx < state.activeSet.length - 1) {
-            state.currentIdx++; loadDoc(state.activeSet[state.currentIdx].url);
-        }
-    }
-
-    function prevPage(e) {
-        if(e) e.stopPropagation();
-        if(state.pageNum > 1) {
-            state.pageNum--; renderPage();
-        } else if(state.currentIdx > 0) {
-            state.currentIdx--; loadDoc(state.activeSet[state.currentIdx].url);
-        }
-    }
-
-    function handleCenterTap(e) {
-        // Si on tape au milieu (entre les zones de tap latérales), on affiche/cache la toolbar
-        document.getElementById('performance-mode').classList.toggle('show-ui');
-    }
-
-    function exitPerformance() {
-        if (document.exitFullscreen) document.exitFullscreen();
-        document.getElementById('performance-mode').style.display = 'none';
-    }
-
-    // --- HELPERS ---
     function save() { localStorage.setItem('messes_v2', JSON.stringify(state.messes)); }
-    function newMesse() { 
-        const n = prompt("Nom de la Messe :"); 
-        if(n) { state.messes.push({name: n, songs: []}); save(); showView('planner'); }
-    }
     function deleteMesse(i) { if(confirm("Supprimer ?")) { state.messes.splice(i,1); save(); showView('planner'); } }
-    
-    // Redimensionnement auto lors de la rotation de la tablette
+
     window.addEventListener('resize', () => { if(state.pdf) renderPage(); });
 
     init();
