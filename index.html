@@ -1,1 +1,715 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pupitre Digital - Paroisse</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    
+    <style>
+        /* Variables & Thème Sombre */
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #bb86fc;
+            --primary-variant: #3700b3;
+            --text-color: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --border-color: #333333;
+            --danger-color: #cf6679;
+        }
 
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Navigation principale */
+        nav {
+            background-color: var(--surface-color);
+            padding: 15px;
+            display: flex;
+            gap: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        button {
+            background-color: var(--surface-color);
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:active { background-color: var(--primary-variant); color: white; }
+        button.btn-primary { background-color: var(--primary-color); color: #000; }
+        button.btn-danger { border-color: var(--danger-color); color: var(--danger-color); }
+
+        /* Gestion des Vues */
+        .view { display: none; padding: 20px; flex: 1; overflow-y: auto; }
+        .view.active { display: block; }
+
+        /* Composants de liste */
+        .list-group { list-style: none; padding: 0; margin: 0; }
+        .list-item {
+            background-color: var(--surface-color);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .list-item span.title { font-size: 1.1em; font-weight: bold; }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        /* Zone Création Messe (Drag & Drop) */
+        #setlist-builder { min-height: 200px; border: 2px dashed var(--border-color); padding: 10px; border-radius: 8px; margin-bottom: 20px; }
+        .setlist-item { background: #2c2c2c; cursor: grab; }
+
+        /* Mode Jeu (Performance) */
+        #view-performance {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #000;
+            z-index: 1000;
+            padding: 0;
+            display: none;
+            flex-direction: column;
+        }
+        #view-performance.active { display: flex; }
+
+        .toolbar-perf {
+            background-color: rgba(30, 30, 30, 0.9);
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: absolute;
+            top: 0; width: 100%;
+            z-index: 1010;
+            transition: transform 0.3s;
+        }
+        .toolbar-perf.hidden { transform: translateY(-100%); }
+
+        .canvas-container {
+            position: relative;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        canvas { position: absolute; max-width: 100%; max-height: 100%; object-fit: contain; }
+        #pdf-canvas { z-index: 1; }
+        #draw-canvas { z-index: 2; pointer-events: none; } /* Activé en mode dessin */
+        #draw-canvas.drawing-active { pointer-events: auto; cursor: crosshair; }
+
+        /* Zones de Tapotement invisibles */
+        .tap-zone {
+            position: absolute;
+            top: 0; bottom: 0;
+            width: 20%;
+            z-index: 5;
+        }
+        .tap-left { left: 0; }
+        .tap-right { right: 0; }
+
+        /* Affichage de texte (Chants manuels/Lectures) */
+        #text-render {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background: #000;
+            color: #fff;
+            padding: 40px;
+            font-size: 24px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            display: none;
+        }
+
+        /* Modales */
+        .modal {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.8); z-index: 2000;
+            justify-content: center; align-items: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--surface-color); padding: 20px;
+            border-radius: 8px; width: 90%; max-width: 500px;
+        }
+        textarea { width: 100%; height: 200px; background: var(--bg-color); color: var(--text-color); padding: 10px; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <button onclick="switchView('library')">📚 Bibliothèque</button>
+        <button onclick="switchView('setlists')">📋 Messes (Setlists)</button>
+    </nav>
+
+    <div id="view-library" class="view active">
+        <h2>Bibliothèque de Chants</h2>
+        <input type="text" id="search-lib" placeholder="Rechercher un chant..." oninput="renderLibrary()">
+        <button onclick="openModal('modal-custom-song')" style="margin-bottom: 20px;">+ Créer un chant texte/accords</button>
+        <ul class="list-group" id="library-list"></ul>
+    </div>
+
+    <div id="view-setlists" class="view">
+        <h2>Création de Messe</h2>
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <input type="text" id="new-setlist-name" placeholder="Nom de la nouvelle messe..." style="margin: 0; flex: 1;">
+            <button class="btn-primary" onclick="createSetlist()">Créer</button>
+        </div>
+        
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1;">
+                <h3>Messe en cours d'édition</h3>
+                <select id="setlist-selector" onchange="loadSetlist(this.value)" style="width: 100%; padding: 10px; margin-bottom: 10px; background: var(--surface-color); color: white;"></select>
+                <button onclick="addReadingToSetlist()" style="margin-bottom: 10px;">+ Ajouter une Lecture/Note</button>
+                <ul class="list-group" id="setlist-builder"></ul>
+                <button class="btn-primary" onclick="startPerformance()" style="width: 100%; margin-top: 10px;">▶ Lancer la Messe</button>
+            </div>
+            <div style="flex: 1;">
+                <h3>Ajouter depuis la Bibliothèque</h3>
+                <input type="text" id="search-add" placeholder="Rechercher..." oninput="renderLibraryForSetlist()">
+                <ul class="list-group" id="library-add-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-performance">
+        <div class="toolbar-perf" id="perf-toolbar">
+            <button onclick="exitPerformance()">✖ Quitter</button>
+            <span id="perf-title" style="font-weight: bold; font-size: 1.2em;">Titre du Chant</span>
+            <div>
+                <button id="btn-draw" onclick="toggleDrawing()">✏️ Annoter</button>
+            </div>
+        </div>
+        
+        <div class="canvas-container" id="perf-container" onclick="toggleToolbar()">
+            <canvas id="pdf-canvas"></canvas>
+            <canvas id="draw-canvas"></canvas>
+            <div id="text-render"></div>
+
+            <div class="tap-zone tap-left" onclick="event.stopPropagation(); prevPage()"></div>
+            <div class="tap-zone tap-right" onclick="event.stopPropagation(); nextPage()"></div>
+        </div>
+    </div>
+
+    <div id="modal-custom-song" class="modal">
+        <div class="modal-content">
+            <h3>Nouveau chant (Texte)</h3>
+            <input type="text" id="custom-title" placeholder="Titre du chant">
+            <textarea id="custom-content" placeholder="Saisissez les paroles et accords ici..."></textarea>
+            <div style="margin-top: 10px; display: flex; justify-content: space-between;">
+                <button onclick="closeModal('modal-custom-song')">Annuler</button>
+                <button class="btn-primary" onclick="saveCustomSong()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-reading" class="modal">
+        <div class="modal-content">
+            <h3>Ajouter une Lecture / Note</h3>
+            <input type="text" id="reading-title" placeholder="Titre (ex: 1ère Lecture)">
+            <textarea id="reading-content" placeholder="Texte optionnel..."></textarea>
+            <div style="margin-top: 10px; display: flex; justify-content: space-between;">
+                <button onclick="closeModal('modal-reading')">Annuler</button>
+                <button class="btn-primary" onclick="saveReading()">Ajouter à la messe</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. CONFIGURATION & INITIALISATION
+        // ==========================================
+        
+        // IMPORTANT: Remplissez ces informations avec votre dépôt GitHub
+        const GITHUB_CONFIG = {
+            username: '[Cyprdu]', // ex: 'mon-paroisse'
+            repo: '[messe]',         // ex: 'partitions'
+            path: 'partitions'      // ex: 'dossier-pdf' (laisser vide '' si à la racine)
+        };
+
+        // Configuration de PDF.js (Nécessaire pour le worker)
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // État global de l'application
+        let state = {
+            library: JSON.parse(localStorage.getItem('paroisse_library')) || [],
+            setlists: JSON.parse(localStorage.getItem('paroisse_setlists')) || {},
+            currentSetlistId: null,
+            annotations: JSON.parse(localStorage.getItem('paroisse_annotations')) || {}
+        };
+
+        // Initialisation
+        async function init() {
+            renderLibrary();
+            renderSetlistsDropdown();
+            initSortable();
+            // Tente de mettre à jour la bibliothèque depuis GitHub en arrière-plan
+            fetchLibraryFromGitHub();
+        }
+
+        // ==========================================
+        // 2. DONNÉES & GITHUB API
+        // ==========================================
+        async function fetchLibraryFromGitHub() {
+            try {
+                const url = `https://api.github.com/repos/${GITHUB_CONFIG.username}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Erreur réseau API GitHub");
+                
+                const data = await response.json();
+                
+                // Ne garder que les PDFs
+                const pdfs = data.filter(file => file.name.toLowerCase().endsWith('.pdf')).map(file => ({
+                    id: file.sha,
+                    title: formatTitle(file.name),
+                    type: 'pdf',
+                    url: file.download_url
+                }));
+
+                // Fusionner avec les chants textes créés manuellement
+                const customSongs = state.library.filter(item => item.type === 'text');
+                state.library = [...pdfs, ...customSongs];
+                
+                localStorage.setItem('paroisse_library', JSON.stringify(state.library));
+                renderLibrary();
+            } catch (error) {
+                console.warn("Impossible de récupérer les partitions GitHub (Mode hors-ligne actif).", error);
+            }
+        }
+
+        function formatTitle(filename) {
+            return filename.replace('.pdf', '').replace(/_/g, ' ');
+        }
+
+        // ==========================================
+        // 3. LOGIQUE DES VUES & INTERFACE
+        // ==========================================
+        function switchView(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${viewId}`).classList.add('active');
+            if (viewId === 'setlists') renderLibraryForSetlist();
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        // --- BIBLIOTHÈQUE ---
+        function renderLibrary() {
+            const query = document.getElementById('search-lib').value.toLowerCase();
+            const list = document.getElementById('library-list');
+            list.innerHTML = '';
+
+            const filtered = state.library.filter(s => s.title.toLowerCase().includes(query));
+            filtered.forEach(song => {
+                const li = document.createElement('li');
+                li.className = 'list-item';
+                li.innerHTML = `
+                    <span class="title">📄 ${song.title} ${song.type === 'text' ? '(Texte)' : ''}</span>
+                    <button onclick="previewSong('${song.id}')">Ouvrir</button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function saveCustomSong() {
+            const title = document.getElementById('custom-title').value;
+            const content = document.getElementById('custom-content').value;
+            if (!title) return alert('Le titre est requis.');
+
+            const newSong = { id: 'custom_' + Date.now(), title, type: 'text', content };
+            state.library.push(newSong);
+            localStorage.setItem('paroisse_library', JSON.stringify(state.library));
+            
+            closeModal('modal-custom-song');
+            document.getElementById('custom-title').value = '';
+            document.getElementById('custom-content').value = '';
+            renderLibrary();
+        }
+
+        // --- MESSES (SETLISTS) ---
+        function createSetlist() {
+            const name = document.getElementById('new-setlist-name').value;
+            if (!name) return;
+            const id = 'setlist_' + Date.now();
+            state.setlists[id] = { id, name, items: [] };
+            saveSetlists();
+            renderSetlistsDropdown();
+            document.getElementById('setlist-selector').value = id;
+            loadSetlist(id);
+            document.getElementById('new-setlist-name').value = '';
+        }
+
+        function renderSetlistsDropdown() {
+            const select = document.getElementById('setlist-selector');
+            select.innerHTML = '<option value="">-- Choisir une messe --</option>';
+            Object.values(state.setlists).forEach(sl => {
+                const opt = document.createElement('option');
+                opt.value = sl.id;
+                opt.textContent = sl.name;
+                select.appendChild(opt);
+            });
+        }
+
+        function loadSetlist(id) {
+            state.currentSetlistId = id;
+            renderCurrentSetlist();
+        }
+
+        function renderCurrentSetlist() {
+            const list = document.getElementById('setlist-builder');
+            list.innerHTML = '';
+            if (!state.currentSetlistId) return;
+
+            const setlist = state.setlists[state.currentSetlistId];
+            setlist.items.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'list-item setlist-item';
+                li.dataset.uid = item.uid; // Unique ID d'instance
+                li.innerHTML = `
+                    <span class="title">☰ ${item.title}</span>
+                    <button class="btn-danger" onclick="removeFromSetlist('${item.uid}')">X</button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function renderLibraryForSetlist() {
+            const query = document.getElementById('search-add').value.toLowerCase();
+            const list = document.getElementById('library-add-list');
+            list.innerHTML = '';
+
+            const filtered = state.library.filter(s => s.title.toLowerCase().includes(query));
+            filtered.forEach(song => {
+                const li = document.createElement('li');
+                li.className = 'list-item';
+                li.innerHTML = `
+                    <span class="title">${song.title}</span>
+                    <button onclick="addToSetlist('${song.id}')">+</button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function addToSetlist(songId) {
+            if (!state.currentSetlistId) return alert('Veuillez d\'abord sélectionner ou créer une messe.');
+            const song = state.library.find(s => s.id === songId);
+            // Ajout d'un UID car le même chant peut être ajouté plusieurs fois
+            const instance = { ...song, uid: 'inst_' + Date.now() }; 
+            state.setlists[state.currentSetlistId].items.push(instance);
+            saveSetlists();
+            renderCurrentSetlist();
+        }
+
+        function removeFromSetlist(uid) {
+            const items = state.setlists[state.currentSetlistId].items;
+            state.setlists[state.currentSetlistId].items = items.filter(i => i.uid !== uid);
+            saveSetlists();
+            renderCurrentSetlist();
+        }
+
+        function addReadingToSetlist() { openModal('modal-reading'); }
+        function saveReading() {
+            if (!state.currentSetlistId) return alert('Sélectionnez une messe.');
+            const title = document.getElementById('reading-title').value;
+            const content = document.getElementById('reading-content').value;
+            const instance = { id: 'read_' + Date.now(), uid: 'inst_' + Date.now(), title, type: 'reading', content };
+            state.setlists[state.currentSetlistId].items.push(instance);
+            saveSetlists();
+            renderCurrentSetlist();
+            closeModal('modal-reading');
+            document.getElementById('reading-title').value = '';
+            document.getElementById('reading-content').value = '';
+        }
+
+        function saveSetlists() { localStorage.setItem('paroisse_setlists', JSON.stringify(state.setlists)); }
+
+        // Initialisation du Drag & Drop (SortableJS)
+        function initSortable() {
+            const list = document.getElementById('setlist-builder');
+            new Sortable(list, {
+                animation: 150,
+                onEnd: function (evt) {
+                    if (!state.currentSetlistId) return;
+                    const items = state.setlists[state.currentSetlistId].items;
+                    // Réorganiser le tableau basé sur le DOM (UIDs)
+                    const domUids = Array.from(list.children).map(li => li.dataset.uid);
+                    state.setlists[state.currentSetlistId].items = domUids.map(uid => items.find(i => i.uid === uid));
+                    saveSetlists();
+                }
+            });
+        }
+
+        // ==========================================
+        // 4. MODE JEU (PERFORMANCE) & PDF.JS
+        // ==========================================
+        let perfState = {
+            queue: [], // Liste des chants à jouer
+            currentIndex: 0,
+            pdfDoc: null,
+            pageNum: 1,
+            isDrawing: false
+        };
+
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+        const textRender = document.getElementById('text-render');
+        
+        // --- Contexte de dessin ---
+        const drawCanvas = document.getElementById('draw-canvas');
+        const drawCtx = drawCanvas.getContext('2d');
+        let drawingMode = false;
+        let lastX = 0; let lastY = 0;
+
+        function startPerformance() {
+            if (!state.currentSetlistId || state.setlists[state.currentSetlistId].items.length === 0) return;
+            perfState.queue = state.setlists[state.currentSetlistId].items;
+            perfState.currentIndex = 0;
+            
+            document.getElementById('view-performance').classList.add('active');
+            loadPerformanceItem(perfState.currentIndex);
+        }
+
+        function exitPerformance() {
+            document.getElementById('view-performance').classList.remove('active');
+            perfState.pdfDoc = null;
+        }
+
+        function toggleToolbar() {
+            if(drawingMode) return; // Ne pas cacher si on dessine
+            document.getElementById('perf-toolbar').classList.toggle('hidden');
+        }
+
+        async function loadPerformanceItem(index, targetLastPage = false) {
+            if (index < 0 || index >= perfState.queue.length) {
+                exitPerformance();
+                return;
+            }
+
+            const item = perfState.queue[index];
+            document.getElementById('perf-title').textContent = `${index + 1}/${perfState.queue.length} - ${item.title}`;
+            clearCanvas();
+            
+            if (item.type === 'pdf') {
+                textRender.style.display = 'none';
+                canvas.style.display = 'block';
+                drawCanvas.style.display = 'block';
+                
+                try {
+                    const loadingTask = pdfjsLib.getDocument(item.url);
+                    perfState.pdfDoc = await loadingTask.promise;
+                    perfState.pageNum = targetLastPage ? perfState.pdfDoc.numPages : 1;
+                    renderPage(perfState.pageNum);
+                } catch (err) {
+                    console.error("Erreur chargement PDF", err);
+                    textRender.style.display = 'block';
+                    textRender.textContent = "Erreur lors du chargement du PDF.\nVérifiez votre connexion internet.";
+                }
+            } else {
+                // Texte ou Lecture
+                perfState.pdfDoc = null;
+                canvas.style.display = 'none';
+                drawCanvas.style.display = 'none';
+                textRender.style.display = 'block';
+                textRender.textContent = item.content;
+            }
+        }
+
+        async function renderPage(num) {
+            if (!perfState.pdfDoc) return;
+            const page = await perfState.pdfDoc.getPage(num);
+            
+            // Calculer l'échelle pour s'adapter à l'écran
+            const container = document.getElementById('perf-container');
+            const viewportUnscaled = page.getViewport({ scale: 1 });
+            const scale = Math.min(container.clientWidth / viewportUnscaled.width, container.clientHeight / viewportUnscaled.height);
+            const viewport = page.getViewport({ scale });
+
+            // Ajuster les canvas
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            drawCanvas.height = viewport.height;
+            drawCanvas.width = viewport.width;
+
+            const renderContext = { canvasContext: ctx, viewport: viewport };
+            await page.render(renderContext).promise;
+            
+            loadAnnotations();
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        }
+
+        // --- NAVIGATION TACTILE LOGIQUE CROISÉE ---
+        function nextPage() {
+            if(drawingMode) return;
+            const item = perfState.queue[perfState.currentIndex];
+            
+            if (item.type !== 'pdf' || !perfState.pdfDoc) {
+                // Si c'est du texte, on passe au chant suivant
+                perfState.currentIndex++;
+                loadPerformanceItem(perfState.currentIndex);
+            } else {
+                if (perfState.pageNum >= perfState.pdfDoc.numPages) {
+                    perfState.currentIndex++;
+                    loadPerformanceItem(perfState.currentIndex);
+                } else {
+                    perfState.pageNum++;
+                    renderPage(perfState.pageNum);
+                }
+            }
+        }
+
+        function prevPage() {
+            if(drawingMode) return;
+            const item = perfState.queue[perfState.currentIndex];
+
+            if (item.type !== 'pdf' || !perfState.pdfDoc) {
+                perfState.currentIndex--;
+                loadPerformanceItem(perfState.currentIndex, true);
+            } else {
+                if (perfState.pageNum <= 1) {
+                    perfState.currentIndex--;
+                    // true demande de cibler la DERNIÈRE page du chant précédent s'il s'agit d'un PDF
+                    loadPerformanceItem(perfState.currentIndex, true);
+                } else {
+                    perfState.pageNum--;
+                    renderPage(perfState.pageNum);
+                }
+            }
+        }
+
+        // ==========================================
+        // 5. ANNOTATIONS (DESSIN SUR CALQUE)
+        // ==========================================
+        function toggleDrawing() {
+            drawingMode = !drawingMode;
+            const btn = document.getElementById('btn-draw');
+            if (drawingMode) {
+                btn.style.backgroundColor = 'var(--primary-color)';
+                btn.style.color = '#000';
+                drawCanvas.classList.add('drawing-active');
+                // Empêcher la toolbar de disparaître
+                document.getElementById('perf-toolbar').classList.remove('hidden');
+            } else {
+                btn.style.backgroundColor = '';
+                btn.style.color = '';
+                drawCanvas.classList.remove('drawing-active');
+            }
+        }
+
+        function getDrawKey() {
+            const item = perfState.queue[perfState.currentIndex];
+            return `${item.id}_page_${perfState.pageNum}`;
+        }
+
+        function loadAnnotations() {
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            const key = getDrawKey();
+            if (state.annotations[key]) {
+                const img = new Image();
+                img.onload = () => drawCtx.drawImage(img, 0, 0, drawCanvas.width, drawCanvas.height);
+                img.src = state.annotations[key];
+            }
+        }
+
+        function saveAnnotations() {
+            const key = getDrawKey();
+            state.annotations[key] = drawCanvas.toDataURL();
+            localStorage.setItem('paroisse_annotations', JSON.stringify(state.annotations));
+        }
+
+        // Gestion des événements de dessin
+        function getPointerPos(e) {
+            const rect = drawCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            // Échelle entre la taille d'affichage CSS et la résolution réelle du canvas
+            const scaleX = drawCanvas.width / rect.width;
+            const scaleY = drawCanvas.height / rect.height;
+            
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function startDrawing(e) {
+            if (!drawingMode) return;
+            e.preventDefault();
+            perfState.isDrawing = true;
+            const pos = getPointerPos(e);
+            lastX = pos.x; lastY = pos.y;
+        }
+
+        function draw(e) {
+            if (!perfState.isDrawing || !drawingMode) return;
+            e.preventDefault();
+            const pos = getPointerPos(e);
+            
+            drawCtx.beginPath();
+            drawCtx.moveTo(lastX, lastY);
+            drawCtx.lineTo(pos.x, pos.y);
+            drawCtx.strokeStyle = 'red';
+            drawCtx.lineWidth = 3;
+            drawCtx.lineCap = 'round';
+            drawCtx.stroke();
+            
+            lastX = pos.x; lastY = pos.y;
+        }
+
+        function stopDrawing() {
+            if (perfState.isDrawing) {
+                perfState.isDrawing = false;
+                saveAnnotations();
+            }
+        }
+
+        drawCanvas.addEventListener('mousedown', startDrawing);
+        drawCanvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', stopDrawing);
+        
+        drawCanvas.addEventListener('touchstart', startDrawing, {passive: false});
+        drawCanvas.addEventListener('touchmove', draw, {passive: false});
+        window.addEventListener('touchend', stopDrawing);
+
+        // Lancement
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
