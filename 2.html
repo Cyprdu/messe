@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cantus - Gestionnaire de Partitions</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #3d5afe;
+            --accent-color: #ff4081;
+            --text-color: #e0e0e0;
+            --border-color: #333;
+            --overlay-alpha: rgba(255, 255, 255, 0.05);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body, html {
+            margin: 0; padding: 0;
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            height: 100%; overflow: hidden;
+        }
+
+        /* --- Mise en page --- */
+        #app { display: flex; flex-direction: column; height: 100vh; }
+        
+        header {
+            background: var(--surface-color);
+            padding: 1rem;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        nav {
+            display: flex; gap: 10px; padding: 10px;
+            background: var(--surface-color);
+            overflow-x: auto;
+        }
+
+        .btn {
+            background: #333; color: white; border: none;
+            padding: 12px 20px; border-radius: 8px;
+            cursor: pointer; font-size: 1rem; display: flex; align-items: center; gap: 8px;
+        }
+
+        .btn-primary { background: var(--primary-color); }
+        .btn-accent { background: var(--accent-color); }
+
+        main { flex: 1; overflow-y: auto; padding: 20px; }
+
+        /* --- Bibliothèque & Setlists --- */
+        .song-card {
+            background: var(--surface-color);
+            padding: 15px; margin-bottom: 10px;
+            border-radius: 8px; display: flex;
+            justify-content: space-between; align-items: center;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .list-container { max-width: 800px; margin: 0 auto; }
+
+        .search-bar {
+            width: 100%; padding: 15px; border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: #252525; color: white; margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+
+        /* --- Mode Jeu (Performance) --- */
+        #performance-mode {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: black; z-index: 1000; display: none;
+        }
+
+        #pdf-viewport {
+            position: relative; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        #annotation-canvas {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none; /* Activé via bouton toolbar */
+        }
+
+        /* Zones de tap pour changer de page */
+        .tap-zone {
+            position: absolute; top: 0; height: 100%; width: 20%;
+            z-index: 1010; transition: background 0.2s;
+        }
+        .tap-left { left: 0; }
+        .tap-right { right: 0; }
+        .tap-zone:active { background: var(--overlay-alpha); }
+
+        #perf-toolbar {
+            position: absolute; top: 0; width: 100%;
+            background: rgba(0,0,0,0.8); padding: 10px;
+            display: flex; justify-content: space-between;
+            z-index: 1020; transform: translateY(-100%);
+            transition: transform 0.3s;
+        }
+
+        #performance-mode:hover #perf-toolbar, 
+        #performance-mode.show-ui #perf-toolbar { transform: translateY(0); }
+
+        /* --- Drag & Drop --- */
+        .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+        .setlist-item {
+            background: #2c2c2c; padding: 12px; margin: 5px 0;
+            border-radius: 6px; cursor: move; display: flex; align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <h2 id="view-title">Cantus</h2>
+        <div id="connection-status" style="font-size: 0.8rem; color: #888;">Synchronisation...</div>
+    </header>
+
+    <nav>
+        <button class="btn" onclick="showView('library')"><i class="fas fa-book"></i> Bibliothèque</button>
+        <button class="btn" onclick="showView('planner')"><i class="fas fa-list-ol"></i> Messes</button>
+        <button class="btn btn-accent" onclick="createNewSong()"><i class="fas fa-plus"></i> Chant Perso</button>
+    </nav>
+
+    <main id="content">
+        </main>
+</div>
+
+<div id="performance-mode">
+    <div id="perf-toolbar">
+        <button class="btn" onclick="exitPerformance()"><i class="fas fa-times"></i> Quitter</button>
+        <div id="perf-info" style="text-align: center">
+            <div id="current-song-title" style="font-weight: bold;">Chant</div>
+            <div id="page-info">Page 1 / 1</div>
+        </div>
+        <button class="btn" id="btn-draw" onclick="toggleDrawing()"><i class="fas fa-pen"></i> Annoter</button>
+    </div>
+    
+    <div id="pdf-viewport">
+        <div class="tap-zone tap-left" onclick="prevPage()"></div>
+        <div class="tap-zone tap-right" onclick="nextPage()"></div>
+        <canvas id="pdf-canvas"></canvas>
+        <canvas id="annotation-canvas"></canvas>
+    </div>
+</div>
+
+<script>
+    /** CONFIGURATION GITHUB **/
+    const GITHUB_USER = 'VOTRE_USERNAME'; 
+    const GITHUB_REPO = 'VOTRE_REPO';
+    const GITHUB_PATH = 'partitions'; // Dossier contenant les PDF
+
+    // Initialisation de PDF.js
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // État de l'application
+    let state = {
+        songs: [],
+        messes: JSON.parse(localStorage.getItem('messes')) || [],
+        currentView: 'library',
+        currentMesse: null,
+        currentSongIndex: 0,
+        pdfDoc: null,
+        pageNum: 1,
+        isDrawing: false
+    };
+
+    // --- INITIALISATION ---
+    async function init() {
+        await fetchSongs();
+        showView('library');
+    }
+
+    async function fetchSongs() {
+        const statusEl = document.getElementById('connection-status');
+        try {
+            // Tentative de récupération GitHub
+            const response = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`);
+            if (!response.ok) throw new Error('GitHub limit reached');
+            
+            const data = await response.ok ? await response.json() : [];
+            const pdfs = data.filter(file => file.name.endsWith('.pdf')).map(file => ({
+                id: file.sha,
+                name: file.name.replace('.pdf', '').replace(/_/g, ' '),
+                url: file.download_url,
+                type: 'pdf'
+            }));
+
+            // Fusion avec les chants locaux (textuels)
+            const localSongs = JSON.parse(localStorage.getItem('custom_songs')) || [];
+            state.songs = [...pdfs, ...localSongs];
+            localStorage.setItem('cached_songs', JSON.stringify(state.songs));
+            statusEl.innerText = "Connecté (GitHub)";
+        } catch (e) {
+            state.songs = JSON.parse(localStorage.getItem('cached_songs')) || [];
+            statusEl.innerText = "Mode Hors-ligne";
+        }
+    }
+
+    // --- ROUTAGE / VUES ---
+    function showView(view) {
+        state.currentView = view;
+        const container = document.getElementById('content');
+        
+        if (view === 'library') {
+            renderLibrary(container);
+        } else if (view === 'planner') {
+            renderPlanner(container);
+        }
+    }
+
+    function renderLibrary(container) {
+        container.innerHTML = `
+            <input type="text" class="search-bar" placeholder="Rechercher un chant..." oninput="filterLibrary(this.value)">
+            <div id="library-list" class="list-container">
+                ${state.songs.map(song => `
+                    <div class="song-card">
+                        <span>${song.name}</span>
+                        <button class="btn btn-primary" onclick="launchSingleSong('${song.id}')">
+                            <i class="fas fa-play"></i>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    function renderPlanner(container) {
+        container.innerHTML = `
+            <div class="list-container">
+                <button class="btn btn-primary" onclick="createNewMesse()" style="width:100%; margin-bottom:20px;">
+                    <i class="fas fa-plus"></i> Créer une nouvelle Messe
+                </button>
+                <div id="messes-list">
+                    ${state.messes.map((m, idx) => `
+                        <div class="song-card">
+                            <span><strong>${m.name}</strong> (${m.songs.length} chants)</span>
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn" onclick="editMesse(${idx})"><i class="fas fa-edit"></i></button>
+                                <button class="btn btn-accent" onclick="startMesse(${idx})"><i class="fas fa-play"></i></button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // --- GESTION DES MESSES ---
+    function createNewMesse() {
+        const name = prompt("Nom de la célébration (ex: Messe de Pâques) :");
+        if (!name) return;
+        state.messes.push({ name, songs: [] });
+        saveMesses();
+        showView('planner');
+    }
+
+    function editMesse(index) {
+        state.currentMesse = index;
+        const messe = state.messes[index];
+        const container = document.getElementById('content');
+        
+        container.innerHTML = `
+            <h3>Édition : ${messe.name}</h3>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h4>Bibliothèque</h4>
+                    <div id="lib-selection" style="max-height:60vh; overflow-y:auto;">
+                        ${state.songs.map(s => `<div class="setlist-item" onclick="addToMesse('${s.id}')">${s.name} <i class="fas fa-plus" style="margin-left:auto"></i></div>`).join('')}
+                    </div>
+                </div>
+                <div>
+                    <h4>Ordre du service</h4>
+                    <div id="messe-sortable" style="min-height:200px; background:#1e1e1e; padding:10px; border-radius:8px;">
+                        ${messe.songs.map((s, i) => `<div class="setlist-item" data-id="${i}">${s.name} <i class="fas fa-grip-lines" style="margin-left:auto"></i></div>`).join('')}
+                    </div>
+                    <button class="btn btn-primary" style="margin-top:20px; width:100%" onclick="showView('planner')">Enregistrer</button>
+                </div>
+            </div>
+        `;
+
+        new Sortable(document.getElementById('messe-sortable'), {
+            animation: 150,
+            onEnd: (evt) => {
+                const movedItem = messe.songs.splice(evt.oldIndex, 1)[0];
+                messe.songs.splice(evt.newIndex, 0, movedItem);
+                saveMesses();
+            }
+        });
+    }
+
+    function addToMesse(songId) {
+        const song = state.songs.find(s => s.id === songId);
+        state.messes[state.currentMesse].songs.push({...song}); // Copie pour permettre les doublons
+        saveMesses();
+        editMesse(state.currentMesse);
+    }
+
+    function saveMesses() {
+        localStorage.setItem('messes', JSON.stringify(state.messes));
+    }
+
+    // --- MOTEUR DE LECTURE (MODE JEU) ---
+    async function startMesse(idx) {
+        const messe = state.messes[idx];
+        if (messe.songs.length === 0) return alert("La messe est vide !");
+        
+        state.currentMesseActive = messe;
+        state.currentSongIndex = 0;
+        document.getElementById('performance-mode').style.display = 'block';
+        loadSong(state.currentMesseActive.songs[0]);
+    }
+
+    async function loadSong(song) {
+        document.getElementById('current-song-title').innerText = song.name;
+        state.pageNum = 1;
+
+        if (song.type === 'pdf') {
+            const loadingTask = pdfjsLib.getDocument(song.url);
+            state.pdfDoc = await loadingTask.promise;
+            renderPage(state.pageNum);
+        }
+    }
+
+    async function renderPage(num) {
+        const page = await state.pdfDoc.getPage(num);
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+
+        const viewport = page.getViewport({ scale: 2 }); // Haute résolution
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        const scale = Math.min(screenWidth / viewport.width, screenHeight / viewport.height);
+        
+        const scaledViewport = page.getViewport({ scale });
+        canvas.height = scaledViewport.height;
+        canvas.width = scaledViewport.width;
+
+        await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+        document.getElementById('page-info').innerText = `Page ${num} / ${state.pdfDoc.numPages}`;
+        
+        // Ajuster le canvas d'annotation
+        const annotCanvas = document.getElementById('annotation-canvas');
+        annotCanvas.width = canvas.width;
+        annotCanvas.height = canvas.height;
+    }
+
+    function nextPage() {
+        if (state.pageNum < state.pdfDoc.numPages) {
+            state.pageNum++;
+            renderPage(state.pageNum);
+        } else {
+            // Passer au chant suivant dans le setlist
+            if (state.currentSongIndex < state.currentMesseActive.songs.length - 1) {
+                state.currentSongIndex++;
+                loadSong(state.currentMesseActive.songs[state.currentSongIndex]);
+            } else {
+                exitPerformance();
+            }
+        }
+    }
+
+    function prevPage() {
+        if (state.pageNum > 1) {
+            state.pageNum--;
+            renderPage(state.pageNum);
+        } else if (state.currentSongIndex > 0) {
+            state.currentSongIndex--;
+            loadSong(state.currentMesseActive.songs[state.currentSongIndex]);
+            // Idéalement, aller à la dernière page du chant précédent
+        }
+    }
+
+    function exitPerformance() {
+        document.getElementById('performance-mode').style.display = 'none';
+        state.pdfDoc = null;
+    }
+
+    // --- ANNOTATIONS (Simplifiées) ---
+    function toggleDrawing() {
+        state.isDrawing = !state.isDrawing;
+        const canvas = document.getElementById('annotation-canvas');
+        canvas.style.pointerEvents = state.isDrawing ? 'auto' : 'none';
+        document.getElementById('btn-draw').classList.toggle('btn-accent');
+    }
+
+    // Lancement de l'app
+    init();
+
+</script>
+</body>
+</html>
