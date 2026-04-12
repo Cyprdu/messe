@@ -1234,20 +1234,19 @@ Astuce : mettez les accords entre crochets [Accord]"></textarea>
    CONFIGURATION — MODIFIEZ CES VALEURS
    ============================================================ */
 const CONFIG = {
-  // Remplacez [USERNAME] et [REPO] par vos informations GitHub
-  // Le dossier 'partitions' doit contenir vos fichiers PDF
-  GITHUB_USER:   '[Cyprdu]',
-  GITHUB_REPO:   '[messe]',
+  // Informations de ton dépôt
+  GITHUB_USER:   'Cyprdu', 
+  GITHUB_REPO:   'messe',
   GITHUB_FOLDER: 'partitions',
+  
+  // Authentification
+  // Note : Dans une app publique, attention à ne pas exposer ce token.
+  GITHUB_TOKEN:  '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',
 
-  // URL de base pour télécharger les fichiers PDF depuis GitHub
-  // (utilise la branche 'main' par défaut — changez si nécessaire)
-  PDF_BASE_URL: 'https://raw.githubusercontent.com/[USERNAME]/[REPO]/main/partitions/',
+  // URL de base pour les fichiers PDF (branche main)
+  PDF_BASE_URL: 'https://raw.githubusercontent.com/Cyprdu/messe/main/partitions/',
 
-  // Durée du cache GitHub en millisecondes (1 heure)
-  CACHE_TTL: 60 * 60 * 1000,
-
-  // Délai avant que les barres du mode jeu se cachent (ms)
+  CACHE_TTL: 60 * 60 * 1000, // 1 heure
   TOOLBAR_HIDE_DELAY: 3500,
 };
 
@@ -1268,75 +1267,52 @@ const STORAGE = {
 };
 
 /* ============================================================
-   APPLICATION PRINCIPALE
+   APPLICATION PRINCIPALE (Module App)
    ============================================================ */
 const App = (function () {
   'use strict';
 
-  // --- État global ---
+  // --- État global de l'application ---
   let state = {
-    // Bibliothèque
-    pdfSongs:    [],   // { id, name, filename, type:'pdf' }
-    customSongs: [],   // { id, name, content, type:'custom' }
-
-    // Setlists / Messes
-    setlists: [],        // [{ id, name, items:[] }]
+    pdfSongs:    [],   
+    customSongs: [],   
+    setlists: [],        
     activeSetlistId: null,
 
-    // Mode jeu
     performance: {
       active:        false,
-      setlist:       null,   // setlist en cours
-      currentIndex:  0,      // index dans la setlist.items
+      setlist:       null,
+      currentIndex:  0,
       currentPage:   1,
       totalPages:    1,
       pdfDoc:        null,
       annotMode:     false,
       annotColor:    '#e8c87a',
       annotSize:     3,
-      annotStrokes:  {},  // { key: [stroke, …] }
+      annotStrokes:  {},
       currentStroke: null,
       isDrawing:     false,
       toolbarTimer:  null,
     },
-
-    // SortableJS instance
     sortable: null,
   };
 
   /* ----------------------------------------------------------
-     UTILITAIRES
+     UTILITAIRES & HELPERS
      ---------------------------------------------------------- */
-  function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2);
-  }
+  const generateId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
-  // Convertit "Nom_Des_Chants.pdf" → "Nom Des Chants"
-  function formatSongName(filename) {
-    return filename
-      .replace(/\.pdf$/i, '')
-      .replace(/[_-]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
+  const formatSongName = (filename) => 
+    filename.replace(/\.pdf$/i, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // Détecte et met en forme les accords [Am], [F], etc.
-  function renderChords(text) {
-    return text.replace(/\[([^\]]+)\]/g, '<span class="chord">$1</span>');
-  }
+  const renderChords = (text) => text.replace(/\[([^\]]+)\]/g, '<span class="chord">$1</span>');
 
-  function save(key, data) {
-    try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) { console.warn('localStorage full:', e); }
-  }
+  const save = (key, data) => { try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) {} };
+  
+  const load = (key) => {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch(e) { return null; }
+  };
 
-  function load(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    } catch(e) { return null; }
-  }
-
-  // Toast notification
   function toast(msg, type = 'info', duration = 3000) {
     const icons = { success:'✓', error:'✕', info:'♪' };
     const el = document.createElement('div');
@@ -1350,26 +1326,7 @@ const App = (function () {
   }
 
   /* ----------------------------------------------------------
-     NAVIGATION PAR ONGLETS
-     ---------------------------------------------------------- */
-  function initTabs() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const view = btn.dataset.view;
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        document.getElementById('view-' + view).classList.add('active');
-
-        if (view === 'masses')  renderMassesGrid();
-        if (view === 'library') renderLibrary();
-        if (view === 'setlist') renderSetlistView();
-      });
-    });
-  }
-
-  /* ----------------------------------------------------------
-     CHARGEMENT DE LA BIBLIOTHÈQUE GITHUB
+     CHARGEMENT GITHUB AVEC AUTHENTIFICATION (API)
      ---------------------------------------------------------- */
   async function syncLibrary(forceRefresh = false) {
     const cacheKey = STORAGE.LIBRARY_CACHE;
@@ -1384,25 +1341,23 @@ const App = (function () {
       }
     }
 
-    // Vérification de la configuration
-    if (CONFIG.GITHUB_USER === '[USERNAME]' || CONFIG.GITHUB_REPO === '[REPO]') {
-      toast('⚠ Configurez votre dépôt GitHub dans CONFIG (CONFIG.GITHUB_USER, CONFIG.GITHUB_REPO)', 'error', 6000);
-      state.pdfSongs = [];
-      renderLibrary();
-      return;
-    }
-
     const songListEl = document.getElementById('song-list');
-    songListEl.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Chargement depuis GitHub…</span></div>`;
+    songListEl.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Synchronisation avec GitHub...</span></div>`;
 
     try {
       const url = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_FOLDER}`;
-      const resp = await fetch(url);
+      
+      const resp = await fetch(url, {
+        headers: {
+          'Authorization': `token ${CONFIG.GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
 
       if (!resp.ok) {
-        if (resp.status === 403) throw new Error('Limite de l\'API GitHub atteinte. Réessayez dans une heure.');
-        if (resp.status === 404) throw new Error('Dépôt ou dossier introuvable. Vérifiez CONFIG.GITHUB_USER et CONFIG.GITHUB_REPO.');
-        throw new Error(`Erreur HTTP ${resp.status}`);
+        if (resp.status === 401) throw new Error('Token GitHub invalide ou expiré.');
+        if (resp.status === 404) throw new Error('Dépôt ou dossier introuvable.');
+        throw new Error(`Erreur API GitHub : ${resp.status}`);
       }
 
       const files = await resp.json();
@@ -1418,1019 +1373,354 @@ const App = (function () {
 
       state.pdfSongs = pdfs;
       save(cacheKey, { ts: now, songs: pdfs });
-      toast(`${pdfs.length} partition(s) chargée(s)`, 'success');
+      toast(`${pdfs.length} partitions synchronisées`, 'success');
       renderLibrary();
     } catch (err) {
-      toast(`Erreur : ${err.message}`, 'error', 5000);
-
-      // Fallback : cache existant même expiré
+      toast(err.message, 'error', 5000);
       const oldCache = load(cacheKey);
       if (oldCache) {
         state.pdfSongs = oldCache.songs;
-        toast('Mode hors-ligne : liste précédente restaurée', 'info');
-      } else {
-        state.pdfSongs = [];
+        toast('Affichage des données locales (Hors-ligne)', 'info');
       }
       renderLibrary();
     }
   }
 
   /* ----------------------------------------------------------
-     CHANTS PERSONNALISÉS
+     GESTION DES CHANTS PERSONNALISÉS
      ---------------------------------------------------------- */
-  function loadCustomSongs() {
-    state.customSongs = load(STORAGE.CUSTOM_SONGS) || [];
-  }
-
-  function saveCustomSongs() {
-    save(STORAGE.CUSTOM_SONGS, state.customSongs);
-  }
-
   let _editingCustomSongId = null;
+
+  function loadCustomSongs() { state.customSongs = load(STORAGE.CUSTOM_SONGS) || []; }
 
   function openAddCustomSong(id = null) {
     _editingCustomSongId = id;
     const modal = document.getElementById('custom-song-modal');
-    const titleEl = document.getElementById('custom-song-modal-title');
-
     if (id) {
       const song = state.customSongs.find(s => s.id === id);
-      if (!song) return;
       document.getElementById('custom-song-name').value = song.name;
       document.getElementById('custom-song-content-input').value = song.content;
-      titleEl.textContent = 'Modifier le chant';
     } else {
       document.getElementById('custom-song-name').value = '';
       document.getElementById('custom-song-content-input').value = '';
-      titleEl.textContent = 'Nouveau chant personnalisé';
     }
-    modal.classList.add('open');
-    setTimeout(() => document.getElementById('custom-song-name').focus(), 100);
+    openModal('custom-song-modal');
   }
 
   function saveCustomSong() {
-    const name    = document.getElementById('custom-song-name').value.trim();
+    const name = document.getElementById('custom-song-name').value.trim();
     const content = document.getElementById('custom-song-content-input').value.trim();
-    if (!name) { toast('Entrez un titre', 'error'); return; }
+    if (!name) return toast('Titre requis', 'error');
 
     if (_editingCustomSongId) {
       const s = state.customSongs.find(s => s.id === _editingCustomSongId);
-      if (s) { s.name = name; s.content = content; }
+      s.name = name; s.content = content;
     } else {
       state.customSongs.push({ id: generateId(), name, content, type: 'custom' });
     }
-    saveCustomSongs();
+    save(STORAGE.CUSTOM_SONGS, state.customSongs);
     closeModal('custom-song-modal');
     renderLibrary();
-    toast('Chant enregistré', 'success');
+    toast('Enregistré', 'success');
   }
 
   function deleteCustomSong(id) {
-    if (!confirm('Supprimer ce chant personnalisé ?')) return;
+    if (!confirm('Supprimer ce chant ?')) return;
     state.customSongs = state.customSongs.filter(s => s.id !== id);
-    saveCustomSongs();
+    save(STORAGE.CUSTOM_SONGS, state.customSongs);
     renderLibrary();
-    toast('Chant supprimé');
   }
 
   /* ----------------------------------------------------------
-     RENDU DE LA BIBLIOTHÈQUE
+     RENDU BIBLIOTHÈQUE & RECHERCHE
      ---------------------------------------------------------- */
   function getAllSongs() {
-    return [...state.pdfSongs, ...state.customSongs]
-      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
-  }
-
-  function filterLibrary() {
-    renderLibrary();
+    return [...state.pdfSongs, ...state.customSongs].sort((a,b) => a.name.localeCompare(b.name, 'fr'));
   }
 
   function renderLibrary() {
-    const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
-    const all   = getAllSongs();
-    const filtered = query ? all.filter(s => s.name.toLowerCase().includes(query)) : all;
-
-    const statsEl = document.getElementById('library-stats');
-    if (statsEl) {
-      statsEl.textContent = `${filtered.length} chant(s) — ${state.pdfSongs.length} PDF · ${state.customSongs.length} personnalisé(s)`;
-    }
-
+    const query = (document.getElementById('search-input')?.value || '').toLowerCase();
+    const filtered = getAllSongs().filter(s => s.name.toLowerCase().includes(query));
+    
+    document.getElementById('library-stats').textContent = `${filtered.length} chants disponibles`;
     const listEl = document.getElementById('song-list');
-    if (!listEl) return;
-
-    if (!filtered.length) {
-      listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">🎵</div><p>Aucun chant trouvé. Synchronisez la bibliothèque ou ajoutez un chant personnalisé.</p></div>`;
-      return;
-    }
-
+    
     listEl.innerHTML = filtered.map(song => `
       <div class="song-card">
         <div class="song-icon">${song.type === 'pdf' ? '📄' : '📝'}</div>
         <div class="song-info">
           <div class="song-name">${escapeHtml(song.name)}</div>
-          <div class="song-meta">${song.type === 'pdf' ? song.filename : 'Chant personnalisé'}</div>
+          <div class="song-meta">${song.type === 'pdf' ? 'Partition PDF' : 'Texte personnalisé'}</div>
         </div>
         <div class="song-actions">
-          <span class="badge ${song.type === 'pdf' ? 'badge-pdf' : 'badge-custom'}">${song.type === 'pdf' ? 'PDF' : 'Texte'}</span>
-          ${song.type === 'custom' ? `
-            <button class="btn-icon" onclick="App.openAddCustomSong('${song.id}')" title="Modifier">✏</button>
-            <button class="btn-icon" onclick="App.deleteCustomSong('${song.id}')" title="Supprimer">🗑</button>
-          ` : ''}
+          <span class="badge ${song.type === 'pdf' ? 'badge-pdf' : 'badge-custom'}">${song.type.toUpperCase()}</span>
+          ${song.type === 'custom' ? `<button class="btn-icon" onclick="App.openAddCustomSong('${song.id}')">✏</button>` : ''}
         </div>
       </div>
-    `).join('');
-  }
-
-  function escapeHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    `).join('') || '<div class="empty-state">Aucun chant trouvé</div>';
   }
 
   /* ----------------------------------------------------------
-     SETLISTS / MESSES
+     GESTION DES MESSES (SETLISTS)
      ---------------------------------------------------------- */
-  function loadSetlists() {
-    state.setlists = load(STORAGE.SETLISTS) || [];
-  }
-
-  function saveSetlists() {
-    save(STORAGE.SETLISTS, state.setlists);
-  }
-
-  function getActiveSetlist() {
-    return state.setlists.find(s => s.id === state.activeSetlistId) || null;
-  }
-
-  function createNewSetlist() {
-    document.getElementById('new-setlist-name').value = '';
-    openModal('new-setlist-modal');
-    setTimeout(() => document.getElementById('new-setlist-name').focus(), 100);
-  }
+  function loadSetlists() { state.setlists = load(STORAGE.SETLISTS) || []; }
+  
+  function getActiveSetlist() { return state.setlists.find(s => s.id === state.activeSetlistId); }
 
   function confirmNewSetlist() {
     const name = document.getElementById('new-setlist-name').value.trim();
-    if (!name) { toast('Entrez un nom pour la messe', 'error'); return; }
-
+    if (!name) return toast('Nom requis', 'error');
     const sl = { id: generateId(), name, items: [], createdAt: Date.now() };
     state.setlists.unshift(sl);
-    saveSetlists();
-    closeModal('new-setlist-modal');
+    save(STORAGE.SETLISTS, state.setlists);
     state.activeSetlistId = sl.id;
-
-    // Activer l'onglet Création de messe
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('[data-view="setlist"]').classList.add('active');
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('view-setlist').classList.add('active');
-
+    closeModal('new-setlist-modal');
     renderSetlistView();
     renderMassesGrid();
-    toast('Nouvelle messe créée', 'success');
-  }
-
-  function selectSetlist(id) {
-    state.activeSetlistId = id;
-    renderSetlistView();
+    switchTab('setlist');
   }
 
   function renderSetlistView() {
-    // Colonne gauche : liste
+    const sl = getActiveSetlist();
     const listEl = document.getElementById('setlist-list');
-    if (listEl) {
-      listEl.innerHTML = state.setlists.map(sl => `
-        <div class="setlist-item ${sl.id === state.activeSetlistId ? 'active' : ''}" onclick="App.selectSetlist('${sl.id}')">
-          <span class="setlist-name">${escapeHtml(sl.name)}</span>
-          <span class="setlist-count">${sl.items.length}</span>
-        </div>
-      `).join('') || '<div class="empty-state" style="padding:20px"><p>Aucune messe.</p></div>';
-    }
+    listEl.innerHTML = state.setlists.map(s => `
+      <div class="setlist-item ${s.id === state.activeSetlistId ? 'active' : ''}" onclick="App.selectSetlist('${s.id}')">
+        <span class="setlist-name">${escapeHtml(s.name)}</span>
+        <span class="setlist-count">${s.items.length}</span>
+      </div>
+    `).join('');
 
-    // Colonne droite : éditeur
-    const editor    = document.getElementById('setlist-editor');
-    const editorEmpty = document.getElementById('setlist-editor-empty');
-    const sl        = getActiveSetlist();
+    const editor = document.getElementById('setlist-editor');
+    const empty = document.getElementById('setlist-editor-empty');
 
     if (!sl) {
-      if (editor) editor.style.display = 'none';
-      if (editorEmpty) editorEmpty.style.display = 'flex';
-      return;
+      editor.style.display = 'none';
+      empty.style.display = 'flex';
+    } else {
+      editor.style.display = 'flex';
+      empty.style.display = 'none';
+      document.getElementById('setlist-title-input').value = sl.name;
+      renderSetlistItems();
     }
-
-    if (editor) editor.style.display = 'flex';
-    if (editorEmpty) editorEmpty.style.display = 'none';
-
-    document.getElementById('setlist-title-input').value = sl.name;
-    renderSetlistItems();
   }
 
   function renderSetlistItems() {
     const sl = getActiveSetlist();
-    if (!sl) return;
-
     const container = document.getElementById('setlist-items');
-    if (!container) return;
-
-    if (!sl.items.length) {
-      container.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-icon">🎼</div><p>Ajoutez des chants ou des lectures pour composer votre programme.</p></div>';
-      destroySortable();
-      return;
-    }
-
-    container.innerHTML = sl.items.map((item, i) => {
-      if (item.type === 'lecture') {
-        return `
-          <div class="setlist-song-item" data-id="${item.uid}">
-            <span class="drag-handle">⠿</span>
-            <span class="setlist-item-num">${i+1}</span>
-            <span class="setlist-song-name" style="color:var(--text-muted); font-style:italic;">📖 ${escapeHtml(item.text)}</span>
-            <span class="badge badge-note">Lecture</span>
-            <button class="btn-icon" onclick="App.removeSetlistItem('${item.uid}')">✕</button>
-          </div>
-        `;
-      }
-      return `
-        <div class="setlist-song-item" data-id="${item.uid}">
-          <span class="drag-handle">⠿</span>
-          <span class="setlist-item-num">${i+1}</span>
-          <span class="setlist-song-name">${escapeHtml(item.name)}</span>
-          <span class="badge ${item.songType === 'pdf' ? 'badge-pdf' : 'badge-custom'}">${item.songType === 'pdf' ? 'PDF' : 'Texte'}</span>
-          <button class="btn-icon" onclick="App.removeSetlistItem('${item.uid}')">✕</button>
-        </div>
-      `;
-    }).join('');
-
+    
+    container.innerHTML = sl.items.map((item, i) => `
+      <div class="setlist-song-item" data-id="${item.uid}">
+        <span class="drag-handle">⠿</span>
+        <span class="setlist-item-num">${i+1}</span>
+        <span class="setlist-song-name">${item.type === 'lecture' ? '📖 ' + escapeHtml(item.text) : escapeHtml(item.name)}</span>
+        <button class="btn-icon" onclick="App.removeSetlistItem('${item.uid}')">✕</button>
+      </div>
+    `).join('') || '<div class="empty-state">Messe vide</div>';
+    
     initSortable();
   }
 
   function initSortable() {
-    destroySortable();
     const el = document.getElementById('setlist-items');
-    if (!el) return;
+    if (state.sortable) state.sortable.destroy();
     state.sortable = Sortable.create(el, {
-      animation: 150,
       handle: '.drag-handle',
-      ghostClass: 'sortable-ghost',
-      chosenClass: 'sortable-chosen',
-      onEnd: function(evt) {
+      animation: 150,
+      onEnd: () => {
         const sl = getActiveSetlist();
-        if (!sl) return;
-        const moved = sl.items.splice(evt.oldIndex, 1)[0];
-        sl.items.splice(evt.newIndex, 0, moved);
-        saveSetlists();
-        renderSetlistItems(); // mise à jour des numéros
+        const uids = Array.from(el.children).map(c => c.dataset.id);
+        sl.items.sort((a, b) => uids.indexOf(a.uid) - uids.indexOf(b.uid));
+        save(STORAGE.SETLISTS, state.setlists);
+        renderSetlistItems();
       }
     });
-  }
-
-  function destroySortable() {
-    if (state.sortable) { state.sortable.destroy(); state.sortable = null; }
-  }
-
-  function saveCurrentSetlist() {
-    const sl = getActiveSetlist();
-    if (!sl) return;
-    const name = document.getElementById('setlist-title-input').value.trim();
-    if (name) sl.name = name;
-    saveSetlists();
-    renderSetlistView();
-    renderMassesGrid();
-    toast('Messe sauvegardée', 'success');
-  }
-
-  function deleteCurrentSetlist() {
-    const sl = getActiveSetlist();
-    if (!sl) return;
-    if (!confirm(`Supprimer la messe « ${sl.name} » ?`)) return;
-    state.setlists = state.setlists.filter(s => s.id !== sl.id);
-    state.activeSetlistId = null;
-    saveSetlists();
-    renderSetlistView();
-    renderMassesGrid();
-    toast('Messe supprimée');
-  }
-
-  function removeSetlistItem(uid) {
-    const sl = getActiveSetlist();
-    if (!sl) return;
-    sl.items = sl.items.filter(i => i.uid !== uid);
-    saveSetlists();
-    renderSetlistItems();
-  }
-
-  /* -- Ajout de chants à la messe -- */
-  function openAddSongModal() {
-    if (!getActiveSetlist()) { toast('Sélectionnez une messe d\'abord', 'error'); return; }
-    document.getElementById('modal-search').value = '';
-    filterModalSongs();
-    openModal('add-to-setlist-modal');
-  }
-
-  function filterModalSongs() {
-    const query = document.getElementById('modal-search').value.toLowerCase();
-    const all   = getAllSongs();
-    const filtered = query ? all.filter(s => s.name.toLowerCase().includes(query)) : all;
-
-    const picker = document.getElementById('add-song-picker');
-    picker.innerHTML = filtered.map(song => `
-      <div class="song-card" onclick="App.addSongToSetlist('${escapeHtml(song.id)}')">
-        <div class="song-icon">${song.type === 'pdf' ? '📄' : '📝'}</div>
-        <div class="song-info">
-          <div class="song-name">${escapeHtml(song.name)}</div>
-          <div class="song-meta">${song.type === 'pdf' ? song.filename : 'Texte personnalisé'}</div>
-        </div>
-        <span class="badge ${song.type === 'pdf' ? 'badge-pdf' : 'badge-custom'}">${song.type === 'pdf' ? 'PDF' : 'Texte'}</span>
-      </div>
-    `).join('') || '<div class="empty-state" style="padding:20px"><p>Aucun résultat.</p></div>';
   }
 
   function addSongToSetlist(songId) {
     const sl = getActiveSetlist();
-    if (!sl) return;
     const song = getAllSongs().find(s => s.id === songId);
-    if (!song) return;
-
-    // Le même chant peut être ajouté plusieurs fois avec un uid unique
-    sl.items.push({
-      uid:      generateId(),
-      songId:   song.id,
-      name:     song.name,
-      songType: song.type,
-      filename: song.filename || null,
-      content:  song.content  || null,
-      url:      song.url      || null,
-      type:     'song',
-    });
-    saveSetlists();
+    sl.items.push({ ...song, uid: generateId() });
+    save(STORAGE.SETLISTS, state.setlists);
     closeModal('add-to-setlist-modal');
     renderSetlistItems();
-    toast(`« ${song.name} » ajouté`, 'success');
-  }
-
-  function addLectureItem() {
-    if (!getActiveSetlist()) { toast('Sélectionnez une messe d\'abord', 'error'); return; }
-    document.getElementById('lecture-text-input').value = '';
-    openModal('lecture-modal');
-    setTimeout(() => document.getElementById('lecture-text-input').focus(), 100);
-  }
-
-  function saveLectureItem() {
-    const text = document.getElementById('lecture-text-input').value.trim();
-    if (!text) { toast('Entrez un texte', 'error'); return; }
-    const sl = getActiveSetlist();
-    if (!sl) return;
-    sl.items.push({ uid: generateId(), type: 'lecture', text });
-    saveSetlists();
-    closeModal('lecture-modal');
-    renderSetlistItems();
-    toast('Lecture ajoutée', 'success');
+    toast(`${song.name} ajouté`);
   }
 
   /* ----------------------------------------------------------
-     GRILLE DES MESSES
+     MODE JEU (PERFORMANCE)
      ---------------------------------------------------------- */
-  function renderMassesGrid() {
-    const grid = document.getElementById('masses-grid');
-    if (!grid) return;
-
-    if (!state.setlists.length) {
-      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🎼</div><p>Aucune messe créée. Commencez par créer un nouveau programme.</p></div>';
-      return;
-    }
-
-    grid.innerHTML = state.setlists.map(sl => {
-      const date = new Date(sl.createdAt).toLocaleDateString('fr-FR', {day:'numeric', month:'long', year:'numeric'});
-      const songs = sl.items.filter(i => i.type === 'song').length;
-      const lectures = sl.items.filter(i => i.type === 'lecture').length;
-      return `
-        <div class="mass-card">
-          <div class="mass-card-name">${escapeHtml(sl.name)}</div>
-          <div class="mass-card-meta">Créée le ${date}</div>
-          <div class="mass-card-meta">${songs} chant(s) · ${lectures} lecture(s)</div>
-          <div class="mass-card-actions">
-            <button class="btn btn-primary" onclick="App.launchPerformanceFromId('${sl.id}')">▶ Jouer</button>
-            <button class="btn btn-secondary" onclick="App.openSetlistEditor('${sl.id}')">✏ Éditer</button>
-            <button class="btn btn-danger" onclick="App.deleteSetlistById('${sl.id}')">🗑</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  function openSetlistEditor(id) {
-    state.activeSetlistId = id;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('[data-view="setlist"]').classList.add('active');
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('view-setlist').classList.add('active');
-    renderSetlistView();
-  }
-
-  function deleteSetlistById(id) {
-    const sl = state.setlists.find(s => s.id === id);
-    if (!sl || !confirm(`Supprimer « ${sl.name} » ?`)) return;
-    state.setlists = state.setlists.filter(s => s.id !== id);
-    if (state.activeSetlistId === id) state.activeSetlistId = null;
-    saveSetlists();
-    renderMassesGrid();
-    toast('Messe supprimée');
-  }
-
-  /* ----------------------------------------------------------
-     MODE JEU — LANCEMENT
-     ---------------------------------------------------------- */
-  function launchPerformanceFromId(id) {
-    state.activeSetlistId = id;
-    launchPerformance();
-  }
-
-  function launchPerformance() {
+  async function launchPerformance() {
     const sl = getActiveSetlist();
-    if (!sl) { toast('Aucune messe sélectionnée', 'error'); return; }
-    // Filtrer les lectures pour la navigation principale
-    const playable = sl.items.filter(i => i.type === 'song');
-    if (!playable.length) { toast('La messe ne contient aucun chant à jouer', 'error'); return; }
-
+    if (!sl || !sl.items.length) return toast('Messe vide !', 'error');
+    
     const p = state.performance;
-    p.active      = true;
-    p.setlist     = sl;
+    p.active = true;
+    p.setlist = sl;
     p.currentIndex = 0;
-    p.currentPage = 1;
-    p.totalPages  = 1;
-    p.pdfDoc      = null;
-    p.annotMode   = false;
-
+    
     document.getElementById('performance-mode').classList.add('active');
-
-    // Mettre en plein écran si possible
-    try {
-      const el = document.getElementById('performance-mode');
-      if (el.requestFullscreen) el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    } catch(e) {}
-
-    renderPerfSetlistPanel();
     loadPerfItem(0);
     startToolbarAutoHide();
   }
 
-  function exitPerformance() {
-    const p = state.performance;
-    p.active  = false;
-    p.pdfDoc  = null;
-    stopToolbarAutoHide();
-    disableAnnotation();
-
-    document.getElementById('performance-mode').classList.remove('active');
-
-    // Quitter le plein écran
-    try {
-      if (document.exitFullscreen)       document.exitFullscreen();
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-    } catch(e) {}
-  }
-
-  /* ----------------------------------------------------------
-     MODE JEU — CHARGEMENT D'UN ITEM
-     ---------------------------------------------------------- */
   async function loadPerfItem(index) {
-    const p  = state.performance;
-    const sl = p.setlist;
-    if (!sl) return;
-
-    // Items jouables uniquement (songs)
-    const playable = sl.items.filter(i => i.type === 'song');
-    if (index < 0 || index >= playable.length) return;
+    const p = state.performance;
+    const item = p.setlist.items[index];
+    if (!item) return;
 
     p.currentIndex = index;
-    p.currentPage  = 1;
-    p.pdfDoc       = null;
+    p.currentPage = 1;
+    document.getElementById('perf-song-title').textContent = item.name || item.text;
+    
+    const canvas = document.getElementById('pdf-canvas');
+    const custom = document.getElementById('custom-song-display');
 
-    const item = playable[index];
-
-    document.getElementById('perf-song-title').textContent = item.name;
-    highlightPerfSetlistItem(index);
-
-    const pdfCanvas    = document.getElementById('pdf-canvas');
-    const customDisplay= document.getElementById('custom-song-display');
-    const annotCanvas  = document.getElementById('annotation-canvas');
-
-    if (item.songType === 'custom') {
-      // Affichage texte / accords
-      pdfCanvas.style.display = 'none';
-      customDisplay.classList.add('active');
-      const contentEl = document.getElementById('custom-song-content');
-      contentEl.innerHTML = renderChords(escapeHtml(item.content || ''));
+    if (item.type === 'pdf') {
+      canvas.style.display = 'block';
+      custom.classList.remove('active');
+      const url = item.url || (CONFIG.PDF_BASE_URL + encodeURIComponent(item.filename));
+      p.pdfDoc = await pdfjsLib.getDocument({ url, httpHeaders: { 'Authorization': `token ${CONFIG.GITHUB_TOKEN}` }}).promise;
+      p.totalPages = p.pdfDoc.numPages;
+      renderPDFPage(1);
+    } else {
+      canvas.style.display = 'none';
+      custom.classList.add('active');
+      document.getElementById('custom-song-content').innerHTML = item.content ? renderChords(item.content) : 'Lecture seule';
       p.totalPages = 1;
       updatePageInfo();
-
-      // Adapter le canvas annotation
-      const container = document.getElementById('perf-canvas-container');
-      annotCanvas.width  = container.clientWidth;
-      annotCanvas.height = container.clientHeight;
-      annotCanvas.style.width  = container.clientWidth + 'px';
-      annotCanvas.style.height = container.clientHeight + 'px';
-      annotCanvas.style.top  = '0';
-      annotCanvas.style.left = '0';
-
-      redrawAnnotations();
-
-    } else if (item.songType === 'pdf') {
-      // Affichage PDF
-      customDisplay.classList.remove('active');
-      pdfCanvas.style.display = 'block';
-
-      const pdfUrl = item.url || (CONFIG.PDF_BASE_URL + encodeURIComponent(item.filename));
-      try {
-        p.pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
-        p.totalPages = p.pdfDoc.numPages;
-        await renderPDFPage(p.currentPage);
-      } catch(err) {
-        toast(`Erreur chargement PDF: ${err.message}`, 'error');
-        pdfCanvas.style.display = 'none';
-      }
     }
-  }
-
-  /* ----------------------------------------------------------
-     RENDU PDF
-     ---------------------------------------------------------- */
-  async function renderPDFPage(pageNum) {
-    const p = state.performance;
-    if (!p.pdfDoc) return;
-
-    const page = await p.pdfDoc.getPage(pageNum);
-    const container = document.getElementById('perf-canvas-container');
-    const canvas    = document.getElementById('pdf-canvas');
-    const annotCanvas = document.getElementById('annotation-canvas');
-    const ctx       = canvas.getContext('2d');
-
-    // Calculer le scale pour remplir l'écran sans déborder
-    const maxW = container.clientWidth;
-    const maxH = container.clientHeight;
-    const viewport0 = page.getViewport({ scale: 1 });
-    const scaleX = maxW / viewport0.width;
-    const scaleY = maxH / viewport0.height;
-    const scale  = Math.min(scaleX, scaleY) * window.devicePixelRatio;
-
-    const viewport = page.getViewport({ scale });
-    canvas.width  = viewport.width;
-    canvas.height = viewport.height;
-
-    // Taille CSS (sans devicePixelRatio pour l'affichage)
-    const cssW = viewport.width / window.devicePixelRatio;
-    const cssH = viewport.height / window.devicePixelRatio;
-    canvas.style.width  = cssW + 'px';
-    canvas.style.height = cssH + 'px';
-
-    await page.render({ canvasContext: ctx, viewport }).promise;
-
-    // Positionner et dimensionner le canvas d'annotation par-dessus
-    const rect = canvas.getBoundingClientRect();
-    annotCanvas.width  = canvas.width;
-    annotCanvas.height = canvas.height;
-    annotCanvas.style.width  = cssW + 'px';
-    annotCanvas.style.height = cssH + 'px';
-    annotCanvas.style.top  = canvas.offsetTop + 'px';
-    annotCanvas.style.left = canvas.offsetLeft + 'px';
-
-    p.currentPage = pageNum;
-    updatePageInfo();
-    redrawAnnotations();
-  }
-
-  function updatePageInfo() {
-    const p = state.performance;
-    document.getElementById('perf-page-info').textContent = `p. ${p.currentPage}/${p.totalPages}`;
-  }
-
-  /* ----------------------------------------------------------
-     MODE JEU — NAVIGATION
-     ---------------------------------------------------------- */
-  function perfNavNext(event) {
-    if (event) showTapFeedback(event.clientX, event.clientY);
-    const p = state.performance;
-    const playable = p.setlist.items.filter(i => i.type === 'song');
-
-    if (p.pdfDoc && p.currentPage < p.totalPages) {
-      // Page suivante du même PDF
-      renderPDFPage(p.currentPage + 1);
-    } else {
-      // Chant suivant dans la setlist
-      const nextIdx = p.currentIndex + 1;
-      if (nextIdx < playable.length) {
-        loadPerfItem(nextIdx);
-      } else {
-        toast('Fin du programme ✝', 'info');
-      }
-    }
-  }
-
-  function perfNavPrev(event) {
-    if (event) showTapFeedback(event.clientX, event.clientY);
-    const p = state.performance;
-
-    if (p.pdfDoc && p.currentPage > 1) {
-      // Page précédente du même PDF
-      renderPDFPage(p.currentPage - 1);
-    } else {
-      // Chant précédent dans la setlist
-      const prevIdx = p.currentIndex - 1;
-      if (prevIdx >= 0) {
-        const playable = p.setlist.items.filter(i => i.type === 'song');
-        const prevItem = playable[prevIdx];
-        // Charger le chant précédent et aller à sa DERNIÈRE page
-        loadPerfItem(prevIdx).then(() => {
-          // Si c'est un PDF, aller à la dernière page
-          if (state.performance.pdfDoc && state.performance.totalPages > 1) {
-            renderPDFPage(state.performance.totalPages);
-          }
-        });
-      } else {
-        toast('Début du programme', 'info');
-      }
-    }
-  }
-
-  function showTapFeedback(x, y) {
-    const el = document.getElementById('tap-indicator');
-    el.style.left = x + 'px';
-    el.style.top  = y + 'px';
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 300);
-  }
-
-  /* ----------------------------------------------------------
-     MODE JEU — PANNEAU SETLIST
-     ---------------------------------------------------------- */
-  function renderPerfSetlistPanel() {
-    const p = state.performance;
-    const sl = p.setlist;
-    const playable = sl.items.filter(i => i.type === 'song');
-
-    const listEl = document.getElementById('perf-setlist-list');
-    listEl.innerHTML = sl.items.map((item, i) => {
-      if (item.type === 'lecture') {
-        return `<div class="perf-setlist-item" style="color:var(--text-muted);font-style:italic;">
-          <span class="perf-setlist-item-num">—</span> 📖 ${escapeHtml(item.text)}
-        </div>`;
-      }
-      const playIdx = playable.indexOf(item);
-      return `<div class="perf-setlist-item ${playIdx === p.currentIndex ? 'current' : ''}" 
-        onclick="App.jumpToSetlistItem(${playIdx})" id="perf-item-${playIdx}">
-        <span class="perf-setlist-item-num">${playIdx+1}</span>
-        ${escapeHtml(item.name)}
-      </div>`;
-    }).join('');
-  }
-
-  function highlightPerfSetlistItem(idx) {
-    document.querySelectorAll('.perf-setlist-item').forEach(el => el.classList.remove('current'));
-    const el = document.getElementById('perf-item-' + idx);
-    if (el) {
-      el.classList.add('current');
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }
-
-  function jumpToSetlistItem(idx) {
-    loadPerfItem(idx);
-    togglePerfSetlist(); // Fermer le panneau
-  }
-
-  function togglePerfSetlist() {
     renderPerfSetlistPanel();
-    document.getElementById('perf-setlist-panel').classList.toggle('open');
   }
 
-  /* ----------------------------------------------------------
-     MODE JEU — AUTO-HIDE DES BARRES
-     ---------------------------------------------------------- */
-  function startToolbarAutoHide() {
+  async function renderPDFPage(num) {
     const p = state.performance;
-    const perfEl = document.getElementById('performance-mode');
-
-    function showToolbars() {
-      document.getElementById('perf-toolbar-top').classList.remove('hidden');
-      document.getElementById('perf-toolbar-bottom').classList.remove('hidden');
-      resetHideTimer();
-    }
-
-    function resetHideTimer() {
-      clearTimeout(p.toolbarTimer);
-      p.toolbarTimer = setTimeout(() => {
-        // Ne pas cacher si le mode annotation est actif
-        if (!p.annotMode) {
-          document.getElementById('perf-toolbar-top').classList.add('hidden');
-          document.getElementById('perf-toolbar-bottom').classList.add('hidden');
-        }
-      }, CONFIG.TOOLBAR_HIDE_DELAY);
-    }
-
-    perfEl.addEventListener('touchstart', showToolbars, { passive: true });
-    perfEl.addEventListener('mousemove',  showToolbars);
-
-    // Afficher initialement
-    showToolbars();
+    const page = await p.pdfDoc.getPage(num);
+    const canvas = document.getElementById('pdf-canvas');
+    const container = document.getElementById('perf-canvas-container');
+    
+    const viewport = page.getViewport({ scale: (container.clientWidth / page.getViewport({scale:1}).width) });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    p.currentPage = num;
+    updatePageInfo();
+    setupAnnotationCanvas();
   }
 
-  function stopToolbarAutoHide() {
-    clearTimeout(state.performance.toolbarTimer);
-    document.getElementById('perf-toolbar-top').classList.remove('hidden');
-    document.getElementById('perf-toolbar-bottom').classList.remove('hidden');
+  function perfNavNext() {
+    const p = state.performance;
+    if (p.currentPage < p.totalPages) renderPDFPage(p.currentPage + 1);
+    else if (p.currentIndex < p.setlist.items.length - 1) loadPerfItem(p.currentIndex + 1);
+    else toast('Fin du programme ✝');
+  }
+
+  function perfNavPrev() {
+    const p = state.performance;
+    if (p.currentPage > 1) renderPDFPage(p.currentPage - 1);
+    else if (p.currentIndex > 0) loadPerfItem(p.currentIndex - 1);
   }
 
   /* ----------------------------------------------------------
      ANNOTATIONS
      ---------------------------------------------------------- */
-  function toggleAnnotation() {
-    const p = state.performance;
-    p.annotMode = !p.annotMode;
-
-    const annotCanvas = document.getElementById('annotation-canvas');
-    const toolbar     = document.getElementById('annotation-toolbar');
-    const btn         = document.getElementById('btn-annot-toggle');
-    const clearBtn    = document.getElementById('btn-clear-annot');
-
-    if (p.annotMode) {
-      annotCanvas.classList.add('active');
-      toolbar.classList.add('visible');
-      btn.classList.add('active');
-      clearBtn.style.display = 'inline-flex';
-      initAnnotationDrawing();
-    } else {
-      disableAnnotation();
-    }
-  }
-
-  function disableAnnotation() {
-    const p = state.performance;
-    p.annotMode   = false;
-    p.isDrawing   = false;
-
-    document.getElementById('annotation-canvas').classList.remove('active');
-    document.getElementById('annotation-toolbar').classList.remove('visible');
-    document.getElementById('btn-annot-toggle').classList.remove('active');
-    document.getElementById('btn-clear-annot').style.display = 'none';
-
-    removeAnnotationListeners();
-  }
-
-  let _annotListeners = {};
-
-  function removeAnnotationListeners() {
-    const c = document.getElementById('annotation-canvas');
-    if (_annotListeners.down)  c.removeEventListener('mousedown',  _annotListeners.down);
-    if (_annotListeners.move)  c.removeEventListener('mousemove',  _annotListeners.move);
-    if (_annotListeners.up)    c.removeEventListener('mouseup',    _annotListeners.up);
-    if (_annotListeners.tdown) c.removeEventListener('touchstart', _annotListeners.tdown);
-    if (_annotListeners.tmove) c.removeEventListener('touchmove',  _annotListeners.tmove);
-    if (_annotListeners.tup)   c.removeEventListener('touchend',   _annotListeners.tup);
-    _annotListeners = {};
-  }
-
-  function initAnnotationDrawing() {
-    const p = state.performance;
-    const canvas = document.getElementById('annotation-canvas');
-
-    removeAnnotationListeners();
-
-    function getPos(e) {
-      const rect  = canvas.getBoundingClientRect();
-      const ratio = canvas.width / rect.width;
-      if (e.touches) {
-        return {
-          x: (e.touches[0].clientX - rect.left) * ratio,
-          y: (e.touches[0].clientY - rect.top)  * ratio
-        };
-      }
-      return {
-        x: (e.clientX - rect.left) * ratio,
-        y: (e.clientY - rect.top)  * ratio
-      };
-    }
-
-    function startDraw(e) {
-      e.preventDefault();
-      p.isDrawing     = true;
-      const pos       = getPos(e);
-      p.currentStroke = { color: p.annotColor, size: p.annotSize, points: [pos] };
-    }
-
-    function draw(e) {
-      if (!p.isDrawing || !p.currentStroke) return;
-      e.preventDefault();
-      const pos = getPos(e);
-      p.currentStroke.points.push(pos);
-
-      // Dessin en temps réel
-      const ctx = canvas.getContext('2d');
-      const pts = p.currentStroke.points;
-      ctx.strokeStyle = p.annotColor;
-      ctx.lineWidth   = p.annotSize;
-      ctx.lineCap     = 'round';
-      ctx.lineJoin    = 'round';
-      ctx.beginPath();
-      if (pts.length >= 2) {
-        ctx.moveTo(pts[pts.length-2].x, pts[pts.length-2].y);
-        ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
-        ctx.stroke();
-      }
-    }
-
-    function endDraw(e) {
-      if (!p.isDrawing) return;
-      p.isDrawing = false;
-      if (p.currentStroke && p.currentStroke.points.length > 1) {
-        const key = annotKey();
-        if (!p.annotStrokes[key]) p.annotStrokes[key] = [];
-        p.annotStrokes[key].push(p.currentStroke);
-        saveAnnotations();
-      }
-      p.currentStroke = null;
-    }
-
-    _annotListeners = {
-      down:  startDraw, move: draw, up: endDraw,
-      tdown: startDraw, tmove: draw, tup: endDraw
-    };
-
-    canvas.addEventListener('mousedown',  startDraw);
-    canvas.addEventListener('mousemove',  draw);
-    canvas.addEventListener('mouseup',    endDraw);
-    canvas.addEventListener('touchstart', startDraw, { passive: false });
-    canvas.addEventListener('touchmove',  draw,      { passive: false });
-    canvas.addEventListener('touchend',   endDraw);
-  }
-
-  function annotKey() {
-    const p = state.performance;
-    const playable = p.setlist.items.filter(i => i.type === 'song');
-    const item = playable[p.currentIndex];
-    return `${item ? item.uid : 'none'}_p${p.currentPage}`;
-  }
-
-  function saveAnnotations() {
-    const all = load(STORAGE.ANNOTATIONS) || {};
-    all[annotKey()] = state.performance.annotStrokes[annotKey()] || [];
-    save(STORAGE.ANNOTATIONS, all);
-  }
-
-  function loadAnnotations() {
-    const all = load(STORAGE.ANNOTATIONS) || {};
-    const key = annotKey();
-    state.performance.annotStrokes[key] = all[key] || [];
+  function setupAnnotationCanvas() {
+    const main = document.getElementById('pdf-canvas');
+    const annot = document.getElementById('annotation-canvas');
+    annot.width = main.width;
+    annot.height = main.height;
+    annot.style.width = main.style.width;
+    annot.style.height = main.style.height;
+    redrawAnnotations();
   }
 
   function redrawAnnotations() {
-    loadAnnotations();
-    const key    = annotKey();
-    const canvas = document.getElementById('annotation-canvas');
-    const ctx    = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const strokes = state.performance.annotStrokes[key] || [];
-    strokes.forEach(stroke => {
-      if (!stroke.points.length) return;
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth   = stroke.size;
-      ctx.lineCap     = 'round';
-      ctx.lineJoin    = 'round';
-      ctx.beginPath();
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      stroke.points.forEach(pt => ctx.lineTo(pt.x, pt.y));
-      ctx.stroke();
+    const key = `annot_${state.performance.setlist.id}_${state.performance.currentIndex}_${state.performance.currentPage}`;
+    const strokes = (load(STORAGE.ANNOTATIONS) || {})[key] || [];
+    const ctx = document.getElementById('annotation-canvas').getContext('2d');
+    ctx.clearRect(0,0,10000,10000);
+    
+    strokes.forEach(s => {
+      ctx.strokeStyle = s.color; ctx.lineWidth = s.size; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(s.pts[0].x, s.pts[0].y);
+      s.pts.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
     });
   }
 
-  function undoAnnotation() {
-    const key = annotKey();
-    const p   = state.performance;
-    if (!p.annotStrokes[key] || !p.annotStrokes[key].length) return;
-    p.annotStrokes[key].pop();
-    saveAnnotations();
-    redrawAnnotations();
-  }
-
-  function clearAnnotations() {
-    if (!confirm('Effacer toutes les annotations de cette page ?')) return;
-    const key = annotKey();
-    state.performance.annotStrokes[key] = [];
-    saveAnnotations();
-    redrawAnnotations();
-  }
-
-  function setAnnotColor(el) {
-    state.performance.annotColor = el.dataset.color;
-    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
-    el.classList.add('selected');
-  }
-
-  function setAnnotSize(el) {
-    state.performance.annotSize = parseInt(el.dataset.size);
-    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
-    el.classList.add('selected');
-  }
-
   /* ----------------------------------------------------------
-     MODALES GÉNÉRIQUES
+     INITIALISATION & TAB MANAGEMENT
      ---------------------------------------------------------- */
-  function openModal(id) {
-    document.getElementById(id).classList.add('open');
+  function switchTab(view) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
+    if (view === 'masses') renderMassesGrid();
+    if (view === 'library') renderLibrary();
+    if (view === 'setlist') renderSetlistView();
   }
 
-  function closeModal(id) {
-    document.getElementById(id).classList.remove('open');
+  function renderMassesGrid() {
+    const grid = document.getElementById('masses-grid');
+    grid.innerHTML = state.setlists.map(sl => `
+      <div class="mass-card">
+        <div class="mass-card-name">${escapeHtml(sl.name)}</div>
+        <div class="mass-card-meta">${sl.items.length} éléments</div>
+        <div class="mass-card-actions">
+          <button class="btn btn-primary" onclick="App.selectSetlist('${sl.id}'); App.launchPerformance()">▶ Jouer</button>
+          <button class="btn btn-secondary" onclick="App.selectSetlist('${sl.id}'); App.switchTab('setlist')">✏ Éditer</button>
+        </div>
+      </div>
+    `).join('') || '<div class="empty-state">Aucune messe enregistrée</div>';
   }
 
-  // Fermer les modales en cliquant sur l'overlay
-  document.querySelectorAll('.modal-overlay').forEach(overlay => {
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) overlay.classList.remove('open');
+  function startToolbarAutoHide() {
+    const hide = () => {
+      if (!state.performance.annotMode) {
+        document.getElementById('perf-toolbar-top').classList.add('hidden');
+        document.getElementById('perf-toolbar-bottom').classList.add('hidden');
+      }
+    };
+    document.addEventListener('mousemove', () => {
+      document.getElementById('perf-toolbar-top').classList.remove('hidden');
+      document.getElementById('perf-toolbar-bottom').classList.remove('hidden');
+      clearTimeout(state.performance.toolbarTimer);
+      state.performance.toolbarTimer = setTimeout(hide, CONFIG.TOOLBAR_HIDE_DELAY);
     });
-  });
-
-  // Fermer avec Escape
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
-    }
-    // Navigation clavier en mode jeu
-    if (state.performance.active) {
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') perfNavNext(null);
-      if (e.key === 'ArrowLeft'  || e.key === 'PageUp')   perfNavPrev(null);
-    }
-  });
-
-  /* ----------------------------------------------------------
-     INITIALISATION
-     ---------------------------------------------------------- */
-  function init() {
-    loadCustomSongs();
-    loadSetlists();
-    initTabs();
-    renderMassesGrid();
-
-    // Charger la bibliothèque (cache ou GitHub)
-    syncLibrary(false);
   }
 
-  /* ----------------------------------------------------------
-     API PUBLIQUE
-     ---------------------------------------------------------- */
+  function escapeHtml(text) {
+    const p = document.createElement('p'); p.textContent = text; return p.innerHTML;
+  }
+
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
   return {
-    // Bibliothèque
-    syncLibrary,
-    filterLibrary,
-    openAddCustomSong,
-    saveCustomSong,
-    deleteCustomSong,
-    filterModalSongs,
-
-    // Setlists
-    createNewSetlist,
-    confirmNewSetlist,
-    selectSetlist,
-    saveCurrentSetlist,
-    deleteCurrentSetlist,
-    deleteSetlistById,
-    openSetlistEditor,
-    removeSetlistItem,
-    openAddSongModal,
-    addSongToSetlist,
-    addLectureItem,
-    saveLectureItem,
-
-    // Mode jeu
-    launchPerformance,
-    launchPerformanceFromId,
-    exitPerformance,
-    perfNavNext,
-    perfNavPrev,
-    togglePerfSetlist,
-    jumpToSetlistItem,
-
-    // Annotations
-    toggleAnnotation,
-    clearAnnotations,
-    undoAnnotation,
-    setAnnotColor,
-    setAnnotSize,
-
-    // Modales
-    openModal,
-    closeModal,
-
-    // Démarrage
-    init,
+    init: () => {
+      loadCustomSongs(); loadSetlists();
+      document.querySelectorAll('.tab-btn').forEach(b => b.onclick = () => switchTab(b.dataset.view));
+      syncLibrary(); renderMassesGrid();
+    },
+    syncLibrary, openAddCustomSong, saveCustomSong, switchTab,
+    confirmNewSetlist, selectSetlist: (id) => { state.activeSetlistId = id; renderSetlistView(); },
+    removeSetlistItem: (uid) => { 
+      const sl = getActiveSetlist(); sl.items = sl.items.filter(i => i.uid !== uid); 
+      save(STORAGE.SETLISTS, state.setlists); renderSetlistItems(); 
+    },
+    openAddSongModal: () => { App.filterModalSongs(); openModal('add-to-setlist-modal'); },
+    filterModalSongs: () => {
+      const q = document.getElementById('modal-search').value.toLowerCase();
+      const songs = getAllSongs().filter(s => s.name.toLowerCase().includes(q));
+      document.getElementById('add-song-picker').innerHTML = songs.map(s => `
+        <div class="song-card" onclick="App.addSongToSetlist('${s.id}')">${s.name}</div>
+      `).join('');
+    },
+    addSongToSetlist, launchPerformance, perfNavNext, perfNavPrev,
+    exitPerformance: () => { state.performance.active = false; document.getElementById('performance-mode').classList.remove('active'); },
+    closeModal, createNewSetlist: () => openModal('new-setlist-modal')
   };
-
 })();
 
-/* ============================================================
-   DÉMARRAGE
-   ============================================================ */
-document.addEventListener('DOMContentLoaded', () => {
-  App.init();
-});
+document.addEventListener('DOMContentLoaded', App.init);
 </script>
 </body>
 </html>
