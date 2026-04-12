@@ -1,715 +1,2436 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pupitre Digital - Paroisse</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    
-    <style>
-        /* Variables & Thème Sombre */
-        :root {
-            --bg-color: #121212;
-            --surface-color: #1e1e1e;
-            --primary-color: #bb86fc;
-            --primary-variant: #3700b3;
-            --text-color: #e0e0e0;
-            --text-muted: #a0a0a0;
-            --border-color: #333333;
-            --danger-color: #cf6679;
-        }
+<meta charset="UTF-8">
+<!-- Empêche le zoom accidentel sur tablette -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>Cantus — Lecteur de Partitions</title>
 
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+<!-- PDF.js via CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
+<!-- SortableJS via CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 
-        /* Navigation principale */
-        nav {
-            background-color: var(--surface-color);
-            padding: 15px;
-            display: flex;
-            gap: 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
+<!-- Google Fonts: Cormorant Garamond (élégant) + DM Sans (lisible) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-        button {
-            background-color: var(--surface-color);
-            color: var(--primary-color);
-            border: 1px solid var(--primary-color);
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
+<style>
+/* ============================================================
+   VARIABLES & RESET
+   ============================================================ */
+:root {
+  --bg-deep:     #0d0f14;
+  --bg-surface:  #13161e;
+  --bg-elevated: #1a1e2a;
+  --bg-hover:    #222736;
+  --bg-card:     #181c27;
 
-        button:active { background-color: var(--primary-variant); color: white; }
-        button.btn-primary { background-color: var(--primary-color); color: #000; }
-        button.btn-danger { border-color: var(--danger-color); color: var(--danger-color); }
+  --border:      #2a2f3f;
+  --border-light:#353b50;
 
-        /* Gestion des Vues */
-        .view { display: none; padding: 20px; flex: 1; overflow-y: auto; }
-        .view.active { display: block; }
+  --gold:        #c9a84c;
+  --gold-dim:    #8a6e2f;
+  --gold-glow:   rgba(201,168,76,0.15);
+  --gold-text:   #e8c87a;
 
-        /* Composants de liste */
-        .list-group { list-style: none; padding: 0; margin: 0; }
-        .list-item {
-            background-color: var(--surface-color);
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .list-item span.title { font-size: 1.1em; font-weight: bold; }
-        
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 16px;
-        }
+  --text-primary:  #e8e6df;
+  --text-secondary:#8a8d96;
+  --text-muted:    #555a6a;
 
-        /* Zone Création Messe (Drag & Drop) */
-        #setlist-builder { min-height: 200px; border: 2px dashed var(--border-color); padding: 10px; border-radius: 8px; margin-bottom: 20px; }
-        .setlist-item { background: #2c2c2c; cursor: grab; }
+  --accent-blue:  #4a7fff;
+  --accent-red:   #c0392b;
+  --accent-green: #27ae60;
 
-        /* Mode Jeu (Performance) */
-        #view-performance {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #000;
-            z-index: 1000;
-            padding: 0;
-            display: none;
-            flex-direction: column;
-        }
-        #view-performance.active { display: flex; }
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
 
-        .toolbar-perf {
-            background-color: rgba(30, 30, 30, 0.9);
-            padding: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: absolute;
-            top: 0; width: 100%;
-            z-index: 1010;
-            transition: transform 0.3s;
-        }
-        .toolbar-perf.hidden { transform: translateY(-100%); }
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body:    'DM Sans', sans-serif;
 
-        .canvas-container {
-            position: relative;
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-        }
+  --transition: 0.2s ease;
+  --shadow-card: 0 2px 16px rgba(0,0,0,0.5);
+  --shadow-modal:0 8px 48px rgba(0,0,0,0.8);
+}
 
-        canvas { position: absolute; max-width: 100%; max-height: 100%; object-fit: contain; }
-        #pdf-canvas { z-index: 1; }
-        #draw-canvas { z-index: 2; pointer-events: none; } /* Activé en mode dessin */
-        #draw-canvas.drawing-active { pointer-events: auto; cursor: crosshair; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* Zones de Tapotement invisibles */
-        .tap-zone {
-            position: absolute;
-            top: 0; bottom: 0;
-            width: 20%;
-            z-index: 5;
-        }
-        .tap-left { left: 0; }
-        .tap-right { right: 0; }
+html, body {
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
 
-        /* Affichage de texte (Chants manuels/Lectures) */
-        #text-render {
-            position: absolute;
-            inset: 0;
-            z-index: 1;
-            background: #000;
-            color: #fff;
-            padding: 40px;
-            font-size: 24px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            display: none;
-        }
+button { cursor: pointer; border: none; background: none; font-family: inherit; color: inherit; }
+input, textarea { font-family: inherit; color: inherit; }
 
-        /* Modales */
-        .modal {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.8); z-index: 2000;
-            justify-content: center; align-items: center;
-        }
-        .modal.active { display: flex; }
-        .modal-content {
-            background: var(--surface-color); padding: 20px;
-            border-radius: 8px; width: 90%; max-width: 500px;
-        }
-        textarea { width: 100%; height: 200px; background: var(--bg-color); color: var(--text-color); padding: 10px; }
-    </style>
+/* Scrollbars personnalisées */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+
+/* ============================================================
+   LAYOUT PRINCIPAL
+   ============================================================ */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* ---- EN-TÊTE ---- */
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 58px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.header-logo {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 600;
+  color: var(--gold-text);
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header-logo .logo-cross {
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
+/* ---- NAVIGATION PAR ONGLETS ---- */
+#nav-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.tab-btn {
+  padding: 7px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.tab-btn.active {
+  background: var(--gold);
+  color: #0d0f14;
+  font-weight: 600;
+}
+
+/* ---- ZONE DE CONTENU ---- */
+#content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.view {
+  display: none;
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px;
+}
+.view.active { display: flex; flex-direction: column; }
+
+/* ============================================================
+   COMPOSANTS COMMUNS
+   ============================================================ */
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--gold-text);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+.section-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+/* Boutons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--gold);
+  color: #0d0f14;
+}
+.btn-primary:hover { background: var(--gold-text); }
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.btn-secondary:hover { border-color: var(--gold-dim); color: var(--gold-text); }
+
+.btn-danger {
+  background: rgba(192,57,43,0.15);
+  border: 1px solid var(--accent-red);
+  color: #e74c3c;
+}
+.btn-danger:hover { background: rgba(192,57,43,0.3); }
+
+.btn-ghost {
+  color: var(--text-secondary);
+  padding: 6px 10px;
+}
+.btn-ghost:hover { color: var(--text-primary); background: var(--bg-hover); border-radius: var(--radius-sm); }
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  transition: all var(--transition);
+  color: var(--text-secondary);
+}
+.btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Champ de recherche */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  transition: border-color var(--transition);
+}
+.search-box:focus-within { border-color: var(--gold-dim); }
+.search-box input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+.search-box input::placeholder { color: var(--text-muted); }
+.search-icon { color: var(--text-muted); font-size: 0.9rem; }
+
+/* Cartes chansons */
+.song-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.song-card:hover {
+  border-color: var(--gold-dim);
+  background: var(--bg-hover);
+}
+.song-card .song-icon {
+  width: 38px;
+  height: 38px;
+  background: var(--gold-glow);
+  border: 1px solid var(--gold-dim);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.song-card .song-info { flex: 1; min-width: 0; }
+.song-card .song-name {
+  font-weight: 500;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+.song-card .song-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.song-card .song-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+.badge-pdf { background: rgba(74,127,255,0.15); color: var(--accent-blue); border: 1px solid rgba(74,127,255,0.3); }
+.badge-custom { background: var(--gold-glow); color: var(--gold-text); border: 1px solid var(--gold-dim); }
+.badge-note { background: rgba(39,174,96,0.15); color: #2ecc71; border: 1px solid rgba(39,174,96,0.3); }
+
+/* Séparateurs ornementaux */
+.ornament {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 16px 0 10px;
+}
+.ornament::before, .ornament::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* États vides */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  gap: 12px;
+}
+.empty-state .empty-icon { font-size: 3rem; opacity: 0.4; }
+.empty-state p { font-size: 0.9rem; max-width: 300px; line-height: 1.6; }
+
+/* Loading spinner */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 60px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Toast notifications */
+#toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  padding: 12px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-modal);
+  animation: slideIn 0.3s ease;
+  max-width: 320px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.toast.success { border-left: 3px solid var(--accent-green); }
+.toast.error   { border-left: 3px solid var(--accent-red); }
+.toast.info    { border-left: 3px solid var(--gold); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+/* ============================================================
+   MODALES
+   ============================================================ */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalIn 0.25s ease;
+}
+@keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: var(--gold-text);
+}
+.modal-body { padding: 20px 24px; }
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Champs de formulaire */
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.form-input {
+  width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color var(--transition);
+  color: var(--text-primary);
+}
+.form-input:focus { border-color: var(--gold-dim); }
+textarea.form-input {
+  min-height: 160px;
+  resize: vertical;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ============================================================
+   VUE BIBLIOTHÈQUE
+   ============================================================ */
+#view-library {
+  gap: 0;
+}
+
+.library-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.library-toolbar .search-box { flex: 1; min-width: 200px; }
+
+.library-stats {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+#song-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ============================================================
+   VUE CRÉATION DE MESSE
+   ============================================================ */
+#view-setlist {
+  gap: 0;
+}
+
+.setlist-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Panneau gauche : liste des messes */
+.setlist-panel-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.setlist-panel-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 2px;
+}
+.setlist-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+
+.setlist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.setlist-item:hover { border-color: var(--gold-dim); }
+.setlist-item.active { border-color: var(--gold); background: var(--gold-glow); }
+.setlist-item .setlist-name { flex: 1; font-size: 0.88rem; font-weight: 500; }
+.setlist-item .setlist-count { font-size: 0.75rem; color: var(--text-muted); }
+
+/* Panneau droit : éditeur de messe */
+.setlist-panel-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.setlist-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.setlist-editor-title {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  color: var(--gold-text);
+  background: none;
+  border: none;
+  outline: none;
+  border-bottom: 1px solid transparent;
+  padding: 4px 0;
+  transition: border-color var(--transition);
+  -webkit-user-select: text;
+  user-select: text;
+}
+.setlist-editor-title:focus { border-bottom-color: var(--gold-dim); }
+.setlist-editor-title::placeholder { color: var(--text-muted); font-style: italic; }
+
+/* Ajouter des chansons à la messe */
+.setlist-add-area {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+/* Liste triable de la messe */
+#setlist-items {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.setlist-song-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+}
+.setlist-song-item:hover { border-color: var(--border-light); }
+.setlist-song-item.sortable-ghost { opacity: 0.4; }
+.setlist-song-item.sortable-chosen { border-color: var(--gold-dim); box-shadow: 0 0 0 2px var(--gold-glow); }
+
+.drag-handle {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: grab;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.drag-handle:active { cursor: grabbing; }
+
+.setlist-item-num {
+  width: 24px;
+  height: 24px;
+  background: var(--bg-elevated);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.setlist-song-name { flex: 1; font-size: 0.9rem; }
+.setlist-song-type { flex-shrink: 0; }
+
+/* ============================================================
+   VUE LISTE DES MESSES (accueil)
+   ============================================================ */
+#view-masses {
+  gap: 16px;
+}
+.masses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.mass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: all var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mass-card:hover { border-color: var(--gold-dim); transform: translateY(-1px); box-shadow: var(--shadow-card); }
+.mass-card-name {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: var(--gold-text);
+}
+.mass-card-meta { font-size: 0.78rem; color: var(--text-muted); }
+.mass-card-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+/* ============================================================
+   MODE JEU (Performance)
+   ============================================================ */
+#performance-mode {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 5000;
+  flex-direction: column;
+}
+#performance-mode.active { display: flex; }
+
+/* Barre supérieure */
+#perf-toolbar-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+  padding: 14px 20px 30px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: opacity 0.4s ease;
+}
+#perf-toolbar-top.hidden { opacity: 0; pointer-events: none; }
+
+#perf-toolbar-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+  padding: 30px 20px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  transition: opacity 0.4s ease;
+}
+#perf-toolbar-bottom.hidden { opacity: 0; pointer-events: none; }
+
+.perf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(8px);
+  transition: all var(--transition);
+}
+.perf-btn:hover { background: rgba(255,255,255,0.22); }
+.perf-btn.active { background: var(--gold); color: #000; border-color: var(--gold); }
+.perf-btn.danger { background: rgba(192,57,43,0.4); border-color: rgba(192,57,43,0.6); }
+
+#perf-song-title {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+}
+#perf-page-info {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.6);
+  font-weight: 500;
+}
+
+/* Zone d'affichage PDF + canvas annotation */
+#perf-canvas-container {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#pdf-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+#annotation-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  touch-action: none;
+  cursor: crosshair;
+  display: none;
+}
+#annotation-canvas.active { display: block; }
+
+/* Zones de tap invisibles */
+.tap-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22%;
+  z-index: 20;
+  /* Décommentez pour déboguer: background: rgba(255,0,0,0.1); */
+}
+#tap-left  { left: 0; }
+#tap-right { right: 0; }
+
+/* Indicateur de tap */
+.tap-indicator {
+  position: fixed;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(201,168,76,0.4);
+  border: 2px solid var(--gold);
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.15s ease, opacity 0.3s ease;
+  z-index: 9999;
+  opacity: 0;
+}
+.tap-indicator.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+
+/* Affichage de la partition texte personnalisée */
+#custom-song-display {
+  display: none;
+  padding: 40px;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+  overflow-y: auto;
+  height: 100%;
+}
+#custom-song-display.active { display: block; }
+#custom-song-content {
+  font-size: 1.4rem;
+  line-height: 2.1;
+  color: #f0ede4;
+  white-space: pre-wrap;
+  font-family: var(--font-body);
+  font-weight: 300;
+}
+
+/* Accords mis en évidence */
+.chord {
+  color: var(--gold-text);
+  font-weight: 600;
+  font-size: 1.1em;
+}
+
+/* ============================================================
+   PANNEAU SETLIST EN MODE JEU
+   ============================================================ */
+#perf-setlist-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  background: rgba(13,15,20,0.95);
+  backdrop-filter: blur(12px);
+  border-left: 1px solid var(--border);
+  z-index: 30;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px;
+  gap: 10px;
+  overflow: hidden;
+}
+#perf-setlist-panel.open { transform: translateX(0); }
+.perf-setlist-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--gold-text);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.perf-setlist-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.perf-setlist-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all var(--transition);
+}
+.perf-setlist-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.perf-setlist-item.current { background: var(--gold-glow); color: var(--gold-text); border: 1px solid var(--gold-dim); }
+.perf-setlist-item-num { width: 22px; font-size: 0.72rem; color: var(--text-muted); font-weight: 600; flex-shrink: 0; }
+
+/* ============================================================
+   PANNEAU ANNOTATION - Barre d'outils
+   ============================================================ */
+#annotation-toolbar {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  background: rgba(13,15,20,0.9);
+  border: 1px solid var(--border-light);
+  border-radius: 99px;
+  padding: 6px 12px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  backdrop-filter: blur(8px);
+}
+#annotation-toolbar.visible { display: flex; }
+
+.color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all var(--transition);
+}
+.color-dot:hover, .color-dot.selected { border-color: #fff; transform: scale(1.15); }
+
+.size-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  cursor: pointer;
+  color: #fff;
+  transition: all var(--transition);
+}
+.size-btn:hover { background: rgba(255,255,255,0.35); }
+.size-btn.selected { background: var(--gold); color: #000; }
+
+.annot-sep { width: 1px; height: 18px; background: var(--border-light); }
+
+/* ============================================================
+   MODAL D'AJOUT DE CHANSON À LA MESSE
+   ============================================================ */
+#add-to-setlist-modal .modal {
+  max-width: 480px;
+}
+#add-song-picker {
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ============================================================
+   RESPONSIVE — Portrait tablette
+   ============================================================ */
+@media (max-width: 768px) {
+  #header { padding: 0 14px; height: 52px; }
+  .tab-btn { padding: 6px 12px; font-size: 0.78rem; }
+  .view { padding: 16px; }
+
+  .setlist-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .setlist-panel-left {
+    max-height: 180px;
+  }
+}
+
+@media (max-width: 480px) {
+  #nav-tabs { gap: 2px; }
+  .tab-btn { padding: 6px 8px; }
+  .header-logo { font-size: 1.3rem; }
+}
+
+/* ============================================================
+   ANIMATIONS D'ENTRÉE DE VUE
+   ============================================================ */
+.view.active { animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Décoration de fond subtile */
+body::before {
+  content: '✝';
+  position: fixed;
+  bottom: -60px;
+  right: -40px;
+  font-size: 300px;
+  color: rgba(201,168,76,0.025);
+  pointer-events: none;
+  z-index: 0;
+  font-family: serif;
+}
+</style>
 </head>
 <body>
 
-    <nav>
-        <button onclick="switchView('library')">📚 Bibliothèque</button>
-        <button onclick="switchView('setlists')">📋 Messes (Setlists)</button>
+<!-- ============================================================
+     STRUCTURE PRINCIPALE
+     ============================================================ -->
+<div id="app">
+
+  <!-- En-tête -->
+  <header id="header">
+    <div class="header-logo">
+      <span class="logo-cross">✝</span>
+      Cantus
+    </div>
+    <nav id="nav-tabs">
+      <button class="tab-btn active" data-view="masses">Mes Messes</button>
+      <button class="tab-btn" data-view="library">Bibliothèque</button>
+      <button class="tab-btn" data-view="setlist">Créer une Messe</button>
     </nav>
+    <button class="btn btn-secondary" onclick="App.syncLibrary(true)" title="Synchroniser la bibliothèque">
+      ↻ Sync
+    </button>
+  </header>
 
-    <div id="view-library" class="view active">
-        <h2>Bibliothèque de Chants</h2>
-        <input type="text" id="search-lib" placeholder="Rechercher un chant..." oninput="renderLibrary()">
-        <button onclick="openModal('modal-custom-song')" style="margin-bottom: 20px;">+ Créer un chant texte/accords</button>
-        <ul class="list-group" id="library-list"></ul>
-    </div>
+  <!-- Contenu -->
+  <main id="content">
 
-    <div id="view-setlists" class="view">
-        <h2>Création de Messe</h2>
-        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <input type="text" id="new-setlist-name" placeholder="Nom de la nouvelle messe..." style="margin: 0; flex: 1;">
-            <button class="btn-primary" onclick="createSetlist()">Créer</button>
+    <!-- ---- VUE : MES MESSES ---- -->
+    <section id="view-masses" class="view active">
+      <div class="section-title">Mes Messes</div>
+      <div class="section-subtitle">Vos programmes liturgiques enregistrés</div>
+      <button class="btn btn-primary" style="align-self:flex-start; margin-bottom:20px;" onclick="App.createNewSetlist()">
+        + Nouvelle Messe
+      </button>
+      <div id="masses-grid" class="masses-grid"></div>
+    </section>
+
+    <!-- ---- VUE : BIBLIOTHÈQUE ---- -->
+    <section id="view-library" class="view">
+      <div class="section-title">Bibliothèque</div>
+      <div class="section-subtitle">Toutes vos partitions disponibles</div>
+
+      <div class="library-toolbar">
+        <div class="search-box" style="flex:1;">
+          <span class="search-icon">🔍</span>
+          <input type="search" id="search-input" placeholder="Rechercher un chant…" oninput="App.filterLibrary()">
         </div>
-        
-        <div style="display: flex; gap: 20px;">
-            <div style="flex: 1;">
-                <h3>Messe en cours d'édition</h3>
-                <select id="setlist-selector" onchange="loadSetlist(this.value)" style="width: 100%; padding: 10px; margin-bottom: 10px; background: var(--surface-color); color: white;"></select>
-                <button onclick="addReadingToSetlist()" style="margin-bottom: 10px;">+ Ajouter une Lecture/Note</button>
-                <ul class="list-group" id="setlist-builder"></ul>
-                <button class="btn-primary" onclick="startPerformance()" style="width: 100%; margin-top: 10px;">▶ Lancer la Messe</button>
+        <button class="btn btn-primary" onclick="App.openAddCustomSong()">+ Chant personnalisé</button>
+      </div>
+
+      <div id="library-stats" class="library-stats"></div>
+      <div id="song-list"></div>
+    </section>
+
+    <!-- ---- VUE : CRÉER UNE MESSE ---- -->
+    <section id="view-setlist" class="view">
+      <div class="section-title">Création de Messe</div>
+      <div class="section-subtitle">Organisez le programme de votre célébration</div>
+
+      <div class="setlist-layout">
+        <!-- Panneau gauche : liste des messes -->
+        <div class="setlist-panel-left">
+          <div class="setlist-panel-title">Messes sauvegardées</div>
+          <button class="btn btn-primary" onclick="App.createNewSetlist()">+ Nouvelle Messe</button>
+          <div id="setlist-list" class="setlist-list"></div>
+        </div>
+
+        <!-- Panneau droit : éditeur -->
+        <div class="setlist-panel-right">
+          <div id="setlist-editor-empty" class="empty-state" style="flex:1;">
+            <div class="empty-icon">📋</div>
+            <p>Sélectionnez ou créez une Messe pour commencer à l'éditer.</p>
+          </div>
+          <div id="setlist-editor" style="display:none; flex-direction:column; height:100%;">
+            <div class="setlist-editor-header">
+              <input type="text" id="setlist-title-input" class="setlist-editor-title" placeholder="Nom de la messe…">
+              <button class="btn btn-secondary" onclick="App.saveCurrentSetlist()">💾 Sauvegarder</button>
+              <button class="btn btn-danger" onclick="App.deleteCurrentSetlist()">🗑</button>
+              <button class="btn btn-primary" onclick="App.launchPerformance()" title="Lancer le mode jeu">
+                ▶ Jouer
+              </button>
             </div>
-            <div style="flex: 1;">
-                <h3>Ajouter depuis la Bibliothèque</h3>
-                <input type="text" id="search-add" placeholder="Rechercher..." oninput="renderLibraryForSetlist()">
-                <ul class="list-group" id="library-add-list"></ul>
+            <div class="setlist-add-area">
+              <button class="btn btn-secondary" onclick="App.openAddSongModal()">+ Ajouter un chant</button>
+              <button class="btn btn-secondary" onclick="App.addLectureItem()">+ Lecture / Note</button>
             </div>
+            <div id="setlist-items"></div>
+          </div>
         </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============================================================
+     MODE JEU (PERFORMANCE)
+     ============================================================ -->
+<div id="performance-mode">
+  <!-- Barre supérieure (auto-hide) -->
+  <div id="perf-toolbar-top">
+    <button class="perf-btn danger" onclick="App.exitPerformance()">✕ Quitter</button>
+    <div id="perf-song-title">—</div>
+    <div id="perf-page-info">p. 1/1</div>
+    <button class="perf-btn" onclick="App.togglePerfSetlist()" id="btn-overview">☰ Programme</button>
+    <button class="perf-btn" id="btn-annot-toggle" onclick="App.toggleAnnotation()">✏ Annoter</button>
+  </div>
+
+  <!-- Zone principale canvas -->
+  <div id="perf-canvas-container">
+    <!-- PDF rendu via pdf.js -->
+    <canvas id="pdf-canvas"></canvas>
+    <!-- Partition texte personnalisée -->
+    <div id="custom-song-display">
+      <pre id="custom-song-content"></pre>
     </div>
+    <!-- Canvas d'annotation superposé -->
+    <canvas id="annotation-canvas"></canvas>
+    <!-- Zones de tap -->
+    <div class="tap-zone" id="tap-left"  onclick="App.perfNavPrev(event)"></div>
+    <div class="tap-zone" id="tap-right" onclick="App.perfNavNext(event)"></div>
+  </div>
 
-    <div id="view-performance">
-        <div class="toolbar-perf" id="perf-toolbar">
-            <button onclick="exitPerformance()">✖ Quitter</button>
-            <span id="perf-title" style="font-weight: bold; font-size: 1.2em;">Titre du Chant</span>
-            <div>
-                <button id="btn-draw" onclick="toggleDrawing()">✏️ Annoter</button>
-            </div>
-        </div>
-        
-        <div class="canvas-container" id="perf-container" onclick="toggleToolbar()">
-            <canvas id="pdf-canvas"></canvas>
-            <canvas id="draw-canvas"></canvas>
-            <div id="text-render"></div>
+  <!-- Barre inférieure -->
+  <div id="perf-toolbar-bottom">
+    <button class="perf-btn" onclick="App.perfNavPrev(null)">◀ Précédent</button>
+    <button class="perf-btn" onclick="App.clearAnnotations()" id="btn-clear-annot" style="display:none">🗑 Effacer annotations</button>
+    <button class="perf-btn" onclick="App.perfNavNext(null)">Suivant ▶</button>
+  </div>
 
-            <div class="tap-zone tap-left" onclick="event.stopPropagation(); prevPage()"></div>
-            <div class="tap-zone tap-right" onclick="event.stopPropagation(); nextPage()"></div>
-        </div>
+  <!-- Barre outils annotation -->
+  <div id="annotation-toolbar">
+    <div class="color-dot selected" style="background:#e8c87a;" data-color="#e8c87a" onclick="App.setAnnotColor(this)"></div>
+    <div class="color-dot" style="background:#e74c3c;" data-color="#e74c3c" onclick="App.setAnnotColor(this)"></div>
+    <div class="color-dot" style="background:#2ecc71;" data-color="#2ecc71" onclick="App.setAnnotColor(this)"></div>
+    <div class="color-dot" style="background:#4a7fff;" data-color="#4a7fff" onclick="App.setAnnotColor(this)"></div>
+    <div class="color-dot" style="background:#fff;" data-color="#fff" onclick="App.setAnnotColor(this)"></div>
+    <div class="annot-sep"></div>
+    <div class="size-btn selected" data-size="3" onclick="App.setAnnotSize(this)">S</div>
+    <div class="size-btn" data-size="6" onclick="App.setAnnotSize(this)">M</div>
+    <div class="size-btn" data-size="12" onclick="App.setAnnotSize(this)">L</div>
+    <div class="annot-sep"></div>
+    <button class="perf-btn" style="padding:6px 12px; font-size:0.78rem;" onclick="App.undoAnnotation()">↩ Annuler</button>
+  </div>
+
+  <!-- Panneau setlist en mode jeu -->
+  <div id="perf-setlist-panel">
+    <div class="perf-setlist-title">📋 Programme</div>
+    <div id="perf-setlist-list" class="perf-setlist-list"></div>
+    <button class="perf-btn" onclick="App.togglePerfSetlist()" style="margin-top:8px">✕ Fermer</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     INDICATEUR DE TAP
+     ============================================================ -->
+<div class="tap-indicator" id="tap-indicator"></div>
+
+<!-- ============================================================
+     TOAST CONTAINER
+     ============================================================ -->
+<div id="toast-container"></div>
+
+<!-- ============================================================
+     MODALES
+     ============================================================ -->
+
+<!-- Modale : Ajouter / éditer un chant personnalisé -->
+<div class="modal-overlay" id="custom-song-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="custom-song-modal-title">Nouveau chant personnalisé</div>
+      <button class="btn-icon" onclick="App.closeModal('custom-song-modal')">✕</button>
     </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Titre du chant</label>
+        <input type="text" class="form-input" id="custom-song-name" placeholder="ex. Alléluia pascal">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Paroles & Accords</label>
+        <textarea class="form-input" id="custom-song-content-input" 
+          placeholder="[Am] Alléluia, [F] alléluia
+[C] Chantez au Seigneur [G] un chant nouveau…
 
-    <div id="modal-custom-song" class="modal">
-        <div class="modal-content">
-            <h3>Nouveau chant (Texte)</h3>
-            <input type="text" id="custom-title" placeholder="Titre du chant">
-            <textarea id="custom-content" placeholder="Saisissez les paroles et accords ici..."></textarea>
-            <div style="margin-top: 10px; display: flex; justify-content: space-between;">
-                <button onclick="closeModal('modal-custom-song')">Annuler</button>
-                <button class="btn-primary" onclick="saveCustomSong()">Enregistrer</button>
-            </div>
-        </div>
+Astuce : mettez les accords entre crochets [Accord]"></textarea>
+      </div>
     </div>
-
-    <div id="modal-reading" class="modal">
-        <div class="modal-content">
-            <h3>Ajouter une Lecture / Note</h3>
-            <input type="text" id="reading-title" placeholder="Titre (ex: 1ère Lecture)">
-            <textarea id="reading-content" placeholder="Texte optionnel..."></textarea>
-            <div style="margin-top: 10px; display: flex; justify-content: space-between;">
-                <button onclick="closeModal('modal-reading')">Annuler</button>
-                <button class="btn-primary" onclick="saveReading()">Ajouter à la messe</button>
-            </div>
-        </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="App.closeModal('custom-song-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="App.saveCustomSong()">💾 Enregistrer</button>
     </div>
+  </div>
+</div>
 
-    <script>
-        // ==========================================
-        // 1. CONFIGURATION & INITIALISATION
-        // ==========================================
-        
-        // IMPORTANT: Remplissez ces informations avec votre dépôt GitHub
-        const GITHUB_CONFIG = {
-            username: '[Cyprdu]', // ex: 'mon-paroisse'
-            repo: '[messe]',         // ex: 'partitions'
-            path: 'partitions'      // ex: 'dossier-pdf' (laisser vide '' si à la racine)
+<!-- Modale : Ajouter un chant à la messe -->
+<div class="modal-overlay" id="add-to-setlist-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Ajouter au programme</div>
+      <button class="btn-icon" onclick="App.closeModal('add-to-setlist-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="search-box" style="margin-bottom:12px">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="modal-search" placeholder="Rechercher…" oninput="App.filterModalSongs()">
+      </div>
+      <div id="add-song-picker"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : Créer une nouvelle messe -->
+<div class="modal-overlay" id="new-setlist-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">Nouvelle Messe</div>
+      <button class="btn-icon" onclick="App.closeModal('new-setlist-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nom de la messe</label>
+        <input type="text" class="form-input" id="new-setlist-name" 
+          placeholder="ex. Dimanche 15 Juillet — Pentecôte">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="App.closeModal('new-setlist-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="App.confirmNewSetlist()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : Ajouter une lecture / note -->
+<div class="modal-overlay" id="lecture-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Lecture / Note</div>
+      <button class="btn-icon" onclick="App.closeModal('lecture-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Texte</label>
+        <input type="text" class="form-input" id="lecture-text-input" 
+          placeholder="ex. Première lecture — Actes des Apôtres">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="App.closeModal('lecture-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="App.saveLectureItem()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script>
+/* ============================================================
+   CONFIGURATION — MODIFIEZ CES VALEURS
+   ============================================================ */
+const CONFIG = {
+  // Remplacez [USERNAME] et [REPO] par vos informations GitHub
+  // Le dossier 'partitions' doit contenir vos fichiers PDF
+  GITHUB_USER:   '[USERNAME]',
+  GITHUB_REPO:   '[REPO]',
+  GITHUB_FOLDER: 'partitions',
+
+  // URL de base pour télécharger les fichiers PDF depuis GitHub
+  // (utilise la branche 'main' par défaut — changez si nécessaire)
+  PDF_BASE_URL: 'https://raw.githubusercontent.com/[USERNAME]/[REPO]/main/partitions/',
+
+  // Durée du cache GitHub en millisecondes (1 heure)
+  CACHE_TTL: 60 * 60 * 1000,
+
+  // Délai avant que les barres du mode jeu se cachent (ms)
+  TOOLBAR_HIDE_DELAY: 3500,
+};
+
+/* ============================================================
+   CONFIGURATION PDF.JS
+   ============================================================ */
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/* ============================================================
+   STOCKAGE — Clés localStorage
+   ============================================================ */
+const STORAGE = {
+  LIBRARY_CACHE:   'cantus_library_cache',
+  CUSTOM_SONGS:    'cantus_custom_songs',
+  SETLISTS:        'cantus_setlists',
+  ANNOTATIONS:     'cantus_annotations',
+};
+
+/* ============================================================
+   APPLICATION PRINCIPALE
+   ============================================================ */
+const App = (function () {
+  'use strict';
+
+  // --- État global ---
+  let state = {
+    // Bibliothèque
+    pdfSongs:    [],   // { id, name, filename, type:'pdf' }
+    customSongs: [],   // { id, name, content, type:'custom' }
+
+    // Setlists / Messes
+    setlists: [],        // [{ id, name, items:[] }]
+    activeSetlistId: null,
+
+    // Mode jeu
+    performance: {
+      active:        false,
+      setlist:       null,   // setlist en cours
+      currentIndex:  0,      // index dans la setlist.items
+      currentPage:   1,
+      totalPages:    1,
+      pdfDoc:        null,
+      annotMode:     false,
+      annotColor:    '#e8c87a',
+      annotSize:     3,
+      annotStrokes:  {},  // { key: [stroke, …] }
+      currentStroke: null,
+      isDrawing:     false,
+      toolbarTimer:  null,
+    },
+
+    // SortableJS instance
+    sortable: null,
+  };
+
+  /* ----------------------------------------------------------
+     UTILITAIRES
+     ---------------------------------------------------------- */
+  function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+
+  // Convertit "Nom_Des_Chants.pdf" → "Nom Des Chants"
+  function formatSongName(filename) {
+    return filename
+      .replace(/\.pdf$/i, '')
+      .replace(/[_-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Détecte et met en forme les accords [Am], [F], etc.
+  function renderChords(text) {
+    return text.replace(/\[([^\]]+)\]/g, '<span class="chord">$1</span>');
+  }
+
+  function save(key, data) {
+    try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) { console.warn('localStorage full:', e); }
+  }
+
+  function load(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch(e) { return null; }
+  }
+
+  // Toast notification
+  function toast(msg, type = 'info', duration = 3000) {
+    const icons = { success:'✓', error:'✕', info:'♪' };
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.innerHTML = `<span>${icons[type]||'•'}</span> ${msg}`;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => {
+      el.style.animation = 'slideOut 0.3s ease forwards';
+      setTimeout(() => el.remove(), 300);
+    }, duration);
+  }
+
+  /* ----------------------------------------------------------
+     NAVIGATION PAR ONGLETS
+     ---------------------------------------------------------- */
+  function initTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.dataset.view;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-' + view).classList.add('active');
+
+        if (view === 'masses')  renderMassesGrid();
+        if (view === 'library') renderLibrary();
+        if (view === 'setlist') renderSetlistView();
+      });
+    });
+  }
+
+  /* ----------------------------------------------------------
+     CHARGEMENT DE LA BIBLIOTHÈQUE GITHUB
+     ---------------------------------------------------------- */
+  async function syncLibrary(forceRefresh = false) {
+    const cacheKey = STORAGE.LIBRARY_CACHE;
+    const now = Date.now();
+
+    if (!forceRefresh) {
+      const cached = load(cacheKey);
+      if (cached && (now - cached.ts) < CONFIG.CACHE_TTL) {
+        state.pdfSongs = cached.songs;
+        renderLibrary();
+        return;
+      }
+    }
+
+    // Vérification de la configuration
+    if (CONFIG.GITHUB_USER === '[USERNAME]' || CONFIG.GITHUB_REPO === '[REPO]') {
+      toast('⚠ Configurez votre dépôt GitHub dans CONFIG (CONFIG.GITHUB_USER, CONFIG.GITHUB_REPO)', 'error', 6000);
+      state.pdfSongs = [];
+      renderLibrary();
+      return;
+    }
+
+    const songListEl = document.getElementById('song-list');
+    songListEl.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Chargement depuis GitHub…</span></div>`;
+
+    try {
+      const url = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_FOLDER}`;
+      const resp = await fetch(url);
+
+      if (!resp.ok) {
+        if (resp.status === 403) throw new Error('Limite de l\'API GitHub atteinte. Réessayez dans une heure.');
+        if (resp.status === 404) throw new Error('Dépôt ou dossier introuvable. Vérifiez CONFIG.GITHUB_USER et CONFIG.GITHUB_REPO.');
+        throw new Error(`Erreur HTTP ${resp.status}`);
+      }
+
+      const files = await resp.json();
+      const pdfs = files
+        .filter(f => f.type === 'file' && f.name.toLowerCase().endsWith('.pdf'))
+        .map(f => ({
+          id:       'pdf_' + f.sha.slice(0, 8),
+          name:     formatSongName(f.name),
+          filename: f.name,
+          type:     'pdf',
+          url:      f.download_url,
+        }));
+
+      state.pdfSongs = pdfs;
+      save(cacheKey, { ts: now, songs: pdfs });
+      toast(`${pdfs.length} partition(s) chargée(s)`, 'success');
+      renderLibrary();
+    } catch (err) {
+      toast(`Erreur : ${err.message}`, 'error', 5000);
+
+      // Fallback : cache existant même expiré
+      const oldCache = load(cacheKey);
+      if (oldCache) {
+        state.pdfSongs = oldCache.songs;
+        toast('Mode hors-ligne : liste précédente restaurée', 'info');
+      } else {
+        state.pdfSongs = [];
+      }
+      renderLibrary();
+    }
+  }
+
+  /* ----------------------------------------------------------
+     CHANTS PERSONNALISÉS
+     ---------------------------------------------------------- */
+  function loadCustomSongs() {
+    state.customSongs = load(STORAGE.CUSTOM_SONGS) || [];
+  }
+
+  function saveCustomSongs() {
+    save(STORAGE.CUSTOM_SONGS, state.customSongs);
+  }
+
+  let _editingCustomSongId = null;
+
+  function openAddCustomSong(id = null) {
+    _editingCustomSongId = id;
+    const modal = document.getElementById('custom-song-modal');
+    const titleEl = document.getElementById('custom-song-modal-title');
+
+    if (id) {
+      const song = state.customSongs.find(s => s.id === id);
+      if (!song) return;
+      document.getElementById('custom-song-name').value = song.name;
+      document.getElementById('custom-song-content-input').value = song.content;
+      titleEl.textContent = 'Modifier le chant';
+    } else {
+      document.getElementById('custom-song-name').value = '';
+      document.getElementById('custom-song-content-input').value = '';
+      titleEl.textContent = 'Nouveau chant personnalisé';
+    }
+    modal.classList.add('open');
+    setTimeout(() => document.getElementById('custom-song-name').focus(), 100);
+  }
+
+  function saveCustomSong() {
+    const name    = document.getElementById('custom-song-name').value.trim();
+    const content = document.getElementById('custom-song-content-input').value.trim();
+    if (!name) { toast('Entrez un titre', 'error'); return; }
+
+    if (_editingCustomSongId) {
+      const s = state.customSongs.find(s => s.id === _editingCustomSongId);
+      if (s) { s.name = name; s.content = content; }
+    } else {
+      state.customSongs.push({ id: generateId(), name, content, type: 'custom' });
+    }
+    saveCustomSongs();
+    closeModal('custom-song-modal');
+    renderLibrary();
+    toast('Chant enregistré', 'success');
+  }
+
+  function deleteCustomSong(id) {
+    if (!confirm('Supprimer ce chant personnalisé ?')) return;
+    state.customSongs = state.customSongs.filter(s => s.id !== id);
+    saveCustomSongs();
+    renderLibrary();
+    toast('Chant supprimé');
+  }
+
+  /* ----------------------------------------------------------
+     RENDU DE LA BIBLIOTHÈQUE
+     ---------------------------------------------------------- */
+  function getAllSongs() {
+    return [...state.pdfSongs, ...state.customSongs]
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }
+
+  function filterLibrary() {
+    renderLibrary();
+  }
+
+  function renderLibrary() {
+    const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+    const all   = getAllSongs();
+    const filtered = query ? all.filter(s => s.name.toLowerCase().includes(query)) : all;
+
+    const statsEl = document.getElementById('library-stats');
+    if (statsEl) {
+      statsEl.textContent = `${filtered.length} chant(s) — ${state.pdfSongs.length} PDF · ${state.customSongs.length} personnalisé(s)`;
+    }
+
+    const listEl = document.getElementById('song-list');
+    if (!listEl) return;
+
+    if (!filtered.length) {
+      listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">🎵</div><p>Aucun chant trouvé. Synchronisez la bibliothèque ou ajoutez un chant personnalisé.</p></div>`;
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(song => `
+      <div class="song-card">
+        <div class="song-icon">${song.type === 'pdf' ? '📄' : '📝'}</div>
+        <div class="song-info">
+          <div class="song-name">${escapeHtml(song.name)}</div>
+          <div class="song-meta">${song.type === 'pdf' ? song.filename : 'Chant personnalisé'}</div>
+        </div>
+        <div class="song-actions">
+          <span class="badge ${song.type === 'pdf' ? 'badge-pdf' : 'badge-custom'}">${song.type === 'pdf' ? 'PDF' : 'Texte'}</span>
+          ${song.type === 'custom' ? `
+            <button class="btn-icon" onclick="App.openAddCustomSong('${song.id}')" title="Modifier">✏</button>
+            <button class="btn-icon" onclick="App.deleteCustomSong('${song.id}')" title="Supprimer">🗑</button>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ----------------------------------------------------------
+     SETLISTS / MESSES
+     ---------------------------------------------------------- */
+  function loadSetlists() {
+    state.setlists = load(STORAGE.SETLISTS) || [];
+  }
+
+  function saveSetlists() {
+    save(STORAGE.SETLISTS, state.setlists);
+  }
+
+  function getActiveSetlist() {
+    return state.setlists.find(s => s.id === state.activeSetlistId) || null;
+  }
+
+  function createNewSetlist() {
+    document.getElementById('new-setlist-name').value = '';
+    openModal('new-setlist-modal');
+    setTimeout(() => document.getElementById('new-setlist-name').focus(), 100);
+  }
+
+  function confirmNewSetlist() {
+    const name = document.getElementById('new-setlist-name').value.trim();
+    if (!name) { toast('Entrez un nom pour la messe', 'error'); return; }
+
+    const sl = { id: generateId(), name, items: [], createdAt: Date.now() };
+    state.setlists.unshift(sl);
+    saveSetlists();
+    closeModal('new-setlist-modal');
+    state.activeSetlistId = sl.id;
+
+    // Activer l'onglet Création de messe
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-view="setlist"]').classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-setlist').classList.add('active');
+
+    renderSetlistView();
+    renderMassesGrid();
+    toast('Nouvelle messe créée', 'success');
+  }
+
+  function selectSetlist(id) {
+    state.activeSetlistId = id;
+    renderSetlistView();
+  }
+
+  function renderSetlistView() {
+    // Colonne gauche : liste
+    const listEl = document.getElementById('setlist-list');
+    if (listEl) {
+      listEl.innerHTML = state.setlists.map(sl => `
+        <div class="setlist-item ${sl.id === state.activeSetlistId ? 'active' : ''}" onclick="App.selectSetlist('${sl.id}')">
+          <span class="setlist-name">${escapeHtml(sl.name)}</span>
+          <span class="setlist-count">${sl.items.length}</span>
+        </div>
+      `).join('') || '<div class="empty-state" style="padding:20px"><p>Aucune messe.</p></div>';
+    }
+
+    // Colonne droite : éditeur
+    const editor    = document.getElementById('setlist-editor');
+    const editorEmpty = document.getElementById('setlist-editor-empty');
+    const sl        = getActiveSetlist();
+
+    if (!sl) {
+      if (editor) editor.style.display = 'none';
+      if (editorEmpty) editorEmpty.style.display = 'flex';
+      return;
+    }
+
+    if (editor) editor.style.display = 'flex';
+    if (editorEmpty) editorEmpty.style.display = 'none';
+
+    document.getElementById('setlist-title-input').value = sl.name;
+    renderSetlistItems();
+  }
+
+  function renderSetlistItems() {
+    const sl = getActiveSetlist();
+    if (!sl) return;
+
+    const container = document.getElementById('setlist-items');
+    if (!container) return;
+
+    if (!sl.items.length) {
+      container.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-icon">🎼</div><p>Ajoutez des chants ou des lectures pour composer votre programme.</p></div>';
+      destroySortable();
+      return;
+    }
+
+    container.innerHTML = sl.items.map((item, i) => {
+      if (item.type === 'lecture') {
+        return `
+          <div class="setlist-song-item" data-id="${item.uid}">
+            <span class="drag-handle">⠿</span>
+            <span class="setlist-item-num">${i+1}</span>
+            <span class="setlist-song-name" style="color:var(--text-muted); font-style:italic;">📖 ${escapeHtml(item.text)}</span>
+            <span class="badge badge-note">Lecture</span>
+            <button class="btn-icon" onclick="App.removeSetlistItem('${item.uid}')">✕</button>
+          </div>
+        `;
+      }
+      return `
+        <div class="setlist-song-item" data-id="${item.uid}">
+          <span class="drag-handle">⠿</span>
+          <span class="setlist-item-num">${i+1}</span>
+          <span class="setlist-song-name">${escapeHtml(item.name)}</span>
+          <span class="badge ${item.songType === 'pdf' ? 'badge-pdf' : 'badge-custom'}">${item.songType === 'pdf' ? 'PDF' : 'Texte'}</span>
+          <button class="btn-icon" onclick="App.removeSetlistItem('${item.uid}')">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    initSortable();
+  }
+
+  function initSortable() {
+    destroySortable();
+    const el = document.getElementById('setlist-items');
+    if (!el) return;
+    state.sortable = Sortable.create(el, {
+      animation: 150,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd: function(evt) {
+        const sl = getActiveSetlist();
+        if (!sl) return;
+        const moved = sl.items.splice(evt.oldIndex, 1)[0];
+        sl.items.splice(evt.newIndex, 0, moved);
+        saveSetlists();
+        renderSetlistItems(); // mise à jour des numéros
+      }
+    });
+  }
+
+  function destroySortable() {
+    if (state.sortable) { state.sortable.destroy(); state.sortable = null; }
+  }
+
+  function saveCurrentSetlist() {
+    const sl = getActiveSetlist();
+    if (!sl) return;
+    const name = document.getElementById('setlist-title-input').value.trim();
+    if (name) sl.name = name;
+    saveSetlists();
+    renderSetlistView();
+    renderMassesGrid();
+    toast('Messe sauvegardée', 'success');
+  }
+
+  function deleteCurrentSetlist() {
+    const sl = getActiveSetlist();
+    if (!sl) return;
+    if (!confirm(`Supprimer la messe « ${sl.name} » ?`)) return;
+    state.setlists = state.setlists.filter(s => s.id !== sl.id);
+    state.activeSetlistId = null;
+    saveSetlists();
+    renderSetlistView();
+    renderMassesGrid();
+    toast('Messe supprimée');
+  }
+
+  function removeSetlistItem(uid) {
+    const sl = getActiveSetlist();
+    if (!sl) return;
+    sl.items = sl.items.filter(i => i.uid !== uid);
+    saveSetlists();
+    renderSetlistItems();
+  }
+
+  /* -- Ajout de chants à la messe -- */
+  function openAddSongModal() {
+    if (!getActiveSetlist()) { toast('Sélectionnez une messe d\'abord', 'error'); return; }
+    document.getElementById('modal-search').value = '';
+    filterModalSongs();
+    openModal('add-to-setlist-modal');
+  }
+
+  function filterModalSongs() {
+    const query = document.getElementById('modal-search').value.toLowerCase();
+    const all   = getAllSongs();
+    const filtered = query ? all.filter(s => s.name.toLowerCase().includes(query)) : all;
+
+    const picker = document.getElementById('add-song-picker');
+    picker.innerHTML = filtered.map(song => `
+      <div class="song-card" onclick="App.addSongToSetlist('${escapeHtml(song.id)}')">
+        <div class="song-icon">${song.type === 'pdf' ? '📄' : '📝'}</div>
+        <div class="song-info">
+          <div class="song-name">${escapeHtml(song.name)}</div>
+          <div class="song-meta">${song.type === 'pdf' ? song.filename : 'Texte personnalisé'}</div>
+        </div>
+        <span class="badge ${song.type === 'pdf' ? 'badge-pdf' : 'badge-custom'}">${song.type === 'pdf' ? 'PDF' : 'Texte'}</span>
+      </div>
+    `).join('') || '<div class="empty-state" style="padding:20px"><p>Aucun résultat.</p></div>';
+  }
+
+  function addSongToSetlist(songId) {
+    const sl = getActiveSetlist();
+    if (!sl) return;
+    const song = getAllSongs().find(s => s.id === songId);
+    if (!song) return;
+
+    // Le même chant peut être ajouté plusieurs fois avec un uid unique
+    sl.items.push({
+      uid:      generateId(),
+      songId:   song.id,
+      name:     song.name,
+      songType: song.type,
+      filename: song.filename || null,
+      content:  song.content  || null,
+      url:      song.url      || null,
+      type:     'song',
+    });
+    saveSetlists();
+    closeModal('add-to-setlist-modal');
+    renderSetlistItems();
+    toast(`« ${song.name} » ajouté`, 'success');
+  }
+
+  function addLectureItem() {
+    if (!getActiveSetlist()) { toast('Sélectionnez une messe d\'abord', 'error'); return; }
+    document.getElementById('lecture-text-input').value = '';
+    openModal('lecture-modal');
+    setTimeout(() => document.getElementById('lecture-text-input').focus(), 100);
+  }
+
+  function saveLectureItem() {
+    const text = document.getElementById('lecture-text-input').value.trim();
+    if (!text) { toast('Entrez un texte', 'error'); return; }
+    const sl = getActiveSetlist();
+    if (!sl) return;
+    sl.items.push({ uid: generateId(), type: 'lecture', text });
+    saveSetlists();
+    closeModal('lecture-modal');
+    renderSetlistItems();
+    toast('Lecture ajoutée', 'success');
+  }
+
+  /* ----------------------------------------------------------
+     GRILLE DES MESSES
+     ---------------------------------------------------------- */
+  function renderMassesGrid() {
+    const grid = document.getElementById('masses-grid');
+    if (!grid) return;
+
+    if (!state.setlists.length) {
+      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🎼</div><p>Aucune messe créée. Commencez par créer un nouveau programme.</p></div>';
+      return;
+    }
+
+    grid.innerHTML = state.setlists.map(sl => {
+      const date = new Date(sl.createdAt).toLocaleDateString('fr-FR', {day:'numeric', month:'long', year:'numeric'});
+      const songs = sl.items.filter(i => i.type === 'song').length;
+      const lectures = sl.items.filter(i => i.type === 'lecture').length;
+      return `
+        <div class="mass-card">
+          <div class="mass-card-name">${escapeHtml(sl.name)}</div>
+          <div class="mass-card-meta">Créée le ${date}</div>
+          <div class="mass-card-meta">${songs} chant(s) · ${lectures} lecture(s)</div>
+          <div class="mass-card-actions">
+            <button class="btn btn-primary" onclick="App.launchPerformanceFromId('${sl.id}')">▶ Jouer</button>
+            <button class="btn btn-secondary" onclick="App.openSetlistEditor('${sl.id}')">✏ Éditer</button>
+            <button class="btn btn-danger" onclick="App.deleteSetlistById('${sl.id}')">🗑</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openSetlistEditor(id) {
+    state.activeSetlistId = id;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-view="setlist"]').classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-setlist').classList.add('active');
+    renderSetlistView();
+  }
+
+  function deleteSetlistById(id) {
+    const sl = state.setlists.find(s => s.id === id);
+    if (!sl || !confirm(`Supprimer « ${sl.name} » ?`)) return;
+    state.setlists = state.setlists.filter(s => s.id !== id);
+    if (state.activeSetlistId === id) state.activeSetlistId = null;
+    saveSetlists();
+    renderMassesGrid();
+    toast('Messe supprimée');
+  }
+
+  /* ----------------------------------------------------------
+     MODE JEU — LANCEMENT
+     ---------------------------------------------------------- */
+  function launchPerformanceFromId(id) {
+    state.activeSetlistId = id;
+    launchPerformance();
+  }
+
+  function launchPerformance() {
+    const sl = getActiveSetlist();
+    if (!sl) { toast('Aucune messe sélectionnée', 'error'); return; }
+    // Filtrer les lectures pour la navigation principale
+    const playable = sl.items.filter(i => i.type === 'song');
+    if (!playable.length) { toast('La messe ne contient aucun chant à jouer', 'error'); return; }
+
+    const p = state.performance;
+    p.active      = true;
+    p.setlist     = sl;
+    p.currentIndex = 0;
+    p.currentPage = 1;
+    p.totalPages  = 1;
+    p.pdfDoc      = null;
+    p.annotMode   = false;
+
+    document.getElementById('performance-mode').classList.add('active');
+
+    // Mettre en plein écran si possible
+    try {
+      const el = document.getElementById('performance-mode');
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } catch(e) {}
+
+    renderPerfSetlistPanel();
+    loadPerfItem(0);
+    startToolbarAutoHide();
+  }
+
+  function exitPerformance() {
+    const p = state.performance;
+    p.active  = false;
+    p.pdfDoc  = null;
+    stopToolbarAutoHide();
+    disableAnnotation();
+
+    document.getElementById('performance-mode').classList.remove('active');
+
+    // Quitter le plein écran
+    try {
+      if (document.exitFullscreen)       document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch(e) {}
+  }
+
+  /* ----------------------------------------------------------
+     MODE JEU — CHARGEMENT D'UN ITEM
+     ---------------------------------------------------------- */
+  async function loadPerfItem(index) {
+    const p  = state.performance;
+    const sl = p.setlist;
+    if (!sl) return;
+
+    // Items jouables uniquement (songs)
+    const playable = sl.items.filter(i => i.type === 'song');
+    if (index < 0 || index >= playable.length) return;
+
+    p.currentIndex = index;
+    p.currentPage  = 1;
+    p.pdfDoc       = null;
+
+    const item = playable[index];
+
+    document.getElementById('perf-song-title').textContent = item.name;
+    highlightPerfSetlistItem(index);
+
+    const pdfCanvas    = document.getElementById('pdf-canvas');
+    const customDisplay= document.getElementById('custom-song-display');
+    const annotCanvas  = document.getElementById('annotation-canvas');
+
+    if (item.songType === 'custom') {
+      // Affichage texte / accords
+      pdfCanvas.style.display = 'none';
+      customDisplay.classList.add('active');
+      const contentEl = document.getElementById('custom-song-content');
+      contentEl.innerHTML = renderChords(escapeHtml(item.content || ''));
+      p.totalPages = 1;
+      updatePageInfo();
+
+      // Adapter le canvas annotation
+      const container = document.getElementById('perf-canvas-container');
+      annotCanvas.width  = container.clientWidth;
+      annotCanvas.height = container.clientHeight;
+      annotCanvas.style.width  = container.clientWidth + 'px';
+      annotCanvas.style.height = container.clientHeight + 'px';
+      annotCanvas.style.top  = '0';
+      annotCanvas.style.left = '0';
+
+      redrawAnnotations();
+
+    } else if (item.songType === 'pdf') {
+      // Affichage PDF
+      customDisplay.classList.remove('active');
+      pdfCanvas.style.display = 'block';
+
+      const pdfUrl = item.url || (CONFIG.PDF_BASE_URL + encodeURIComponent(item.filename));
+      try {
+        p.pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+        p.totalPages = p.pdfDoc.numPages;
+        await renderPDFPage(p.currentPage);
+      } catch(err) {
+        toast(`Erreur chargement PDF: ${err.message}`, 'error');
+        pdfCanvas.style.display = 'none';
+      }
+    }
+  }
+
+  /* ----------------------------------------------------------
+     RENDU PDF
+     ---------------------------------------------------------- */
+  async function renderPDFPage(pageNum) {
+    const p = state.performance;
+    if (!p.pdfDoc) return;
+
+    const page = await p.pdfDoc.getPage(pageNum);
+    const container = document.getElementById('perf-canvas-container');
+    const canvas    = document.getElementById('pdf-canvas');
+    const annotCanvas = document.getElementById('annotation-canvas');
+    const ctx       = canvas.getContext('2d');
+
+    // Calculer le scale pour remplir l'écran sans déborder
+    const maxW = container.clientWidth;
+    const maxH = container.clientHeight;
+    const viewport0 = page.getViewport({ scale: 1 });
+    const scaleX = maxW / viewport0.width;
+    const scaleY = maxH / viewport0.height;
+    const scale  = Math.min(scaleX, scaleY) * window.devicePixelRatio;
+
+    const viewport = page.getViewport({ scale });
+    canvas.width  = viewport.width;
+    canvas.height = viewport.height;
+
+    // Taille CSS (sans devicePixelRatio pour l'affichage)
+    const cssW = viewport.width / window.devicePixelRatio;
+    const cssH = viewport.height / window.devicePixelRatio;
+    canvas.style.width  = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    // Positionner et dimensionner le canvas d'annotation par-dessus
+    const rect = canvas.getBoundingClientRect();
+    annotCanvas.width  = canvas.width;
+    annotCanvas.height = canvas.height;
+    annotCanvas.style.width  = cssW + 'px';
+    annotCanvas.style.height = cssH + 'px';
+    annotCanvas.style.top  = canvas.offsetTop + 'px';
+    annotCanvas.style.left = canvas.offsetLeft + 'px';
+
+    p.currentPage = pageNum;
+    updatePageInfo();
+    redrawAnnotations();
+  }
+
+  function updatePageInfo() {
+    const p = state.performance;
+    document.getElementById('perf-page-info').textContent = `p. ${p.currentPage}/${p.totalPages}`;
+  }
+
+  /* ----------------------------------------------------------
+     MODE JEU — NAVIGATION
+     ---------------------------------------------------------- */
+  function perfNavNext(event) {
+    if (event) showTapFeedback(event.clientX, event.clientY);
+    const p = state.performance;
+    const playable = p.setlist.items.filter(i => i.type === 'song');
+
+    if (p.pdfDoc && p.currentPage < p.totalPages) {
+      // Page suivante du même PDF
+      renderPDFPage(p.currentPage + 1);
+    } else {
+      // Chant suivant dans la setlist
+      const nextIdx = p.currentIndex + 1;
+      if (nextIdx < playable.length) {
+        loadPerfItem(nextIdx);
+      } else {
+        toast('Fin du programme ✝', 'info');
+      }
+    }
+  }
+
+  function perfNavPrev(event) {
+    if (event) showTapFeedback(event.clientX, event.clientY);
+    const p = state.performance;
+
+    if (p.pdfDoc && p.currentPage > 1) {
+      // Page précédente du même PDF
+      renderPDFPage(p.currentPage - 1);
+    } else {
+      // Chant précédent dans la setlist
+      const prevIdx = p.currentIndex - 1;
+      if (prevIdx >= 0) {
+        const playable = p.setlist.items.filter(i => i.type === 'song');
+        const prevItem = playable[prevIdx];
+        // Charger le chant précédent et aller à sa DERNIÈRE page
+        loadPerfItem(prevIdx).then(() => {
+          // Si c'est un PDF, aller à la dernière page
+          if (state.performance.pdfDoc && state.performance.totalPages > 1) {
+            renderPDFPage(state.performance.totalPages);
+          }
+        });
+      } else {
+        toast('Début du programme', 'info');
+      }
+    }
+  }
+
+  function showTapFeedback(x, y) {
+    const el = document.getElementById('tap-indicator');
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 300);
+  }
+
+  /* ----------------------------------------------------------
+     MODE JEU — PANNEAU SETLIST
+     ---------------------------------------------------------- */
+  function renderPerfSetlistPanel() {
+    const p = state.performance;
+    const sl = p.setlist;
+    const playable = sl.items.filter(i => i.type === 'song');
+
+    const listEl = document.getElementById('perf-setlist-list');
+    listEl.innerHTML = sl.items.map((item, i) => {
+      if (item.type === 'lecture') {
+        return `<div class="perf-setlist-item" style="color:var(--text-muted);font-style:italic;">
+          <span class="perf-setlist-item-num">—</span> 📖 ${escapeHtml(item.text)}
+        </div>`;
+      }
+      const playIdx = playable.indexOf(item);
+      return `<div class="perf-setlist-item ${playIdx === p.currentIndex ? 'current' : ''}" 
+        onclick="App.jumpToSetlistItem(${playIdx})" id="perf-item-${playIdx}">
+        <span class="perf-setlist-item-num">${playIdx+1}</span>
+        ${escapeHtml(item.name)}
+      </div>`;
+    }).join('');
+  }
+
+  function highlightPerfSetlistItem(idx) {
+    document.querySelectorAll('.perf-setlist-item').forEach(el => el.classList.remove('current'));
+    const el = document.getElementById('perf-item-' + idx);
+    if (el) {
+      el.classList.add('current');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function jumpToSetlistItem(idx) {
+    loadPerfItem(idx);
+    togglePerfSetlist(); // Fermer le panneau
+  }
+
+  function togglePerfSetlist() {
+    renderPerfSetlistPanel();
+    document.getElementById('perf-setlist-panel').classList.toggle('open');
+  }
+
+  /* ----------------------------------------------------------
+     MODE JEU — AUTO-HIDE DES BARRES
+     ---------------------------------------------------------- */
+  function startToolbarAutoHide() {
+    const p = state.performance;
+    const perfEl = document.getElementById('performance-mode');
+
+    function showToolbars() {
+      document.getElementById('perf-toolbar-top').classList.remove('hidden');
+      document.getElementById('perf-toolbar-bottom').classList.remove('hidden');
+      resetHideTimer();
+    }
+
+    function resetHideTimer() {
+      clearTimeout(p.toolbarTimer);
+      p.toolbarTimer = setTimeout(() => {
+        // Ne pas cacher si le mode annotation est actif
+        if (!p.annotMode) {
+          document.getElementById('perf-toolbar-top').classList.add('hidden');
+          document.getElementById('perf-toolbar-bottom').classList.add('hidden');
+        }
+      }, CONFIG.TOOLBAR_HIDE_DELAY);
+    }
+
+    perfEl.addEventListener('touchstart', showToolbars, { passive: true });
+    perfEl.addEventListener('mousemove',  showToolbars);
+
+    // Afficher initialement
+    showToolbars();
+  }
+
+  function stopToolbarAutoHide() {
+    clearTimeout(state.performance.toolbarTimer);
+    document.getElementById('perf-toolbar-top').classList.remove('hidden');
+    document.getElementById('perf-toolbar-bottom').classList.remove('hidden');
+  }
+
+  /* ----------------------------------------------------------
+     ANNOTATIONS
+     ---------------------------------------------------------- */
+  function toggleAnnotation() {
+    const p = state.performance;
+    p.annotMode = !p.annotMode;
+
+    const annotCanvas = document.getElementById('annotation-canvas');
+    const toolbar     = document.getElementById('annotation-toolbar');
+    const btn         = document.getElementById('btn-annot-toggle');
+    const clearBtn    = document.getElementById('btn-clear-annot');
+
+    if (p.annotMode) {
+      annotCanvas.classList.add('active');
+      toolbar.classList.add('visible');
+      btn.classList.add('active');
+      clearBtn.style.display = 'inline-flex';
+      initAnnotationDrawing();
+    } else {
+      disableAnnotation();
+    }
+  }
+
+  function disableAnnotation() {
+    const p = state.performance;
+    p.annotMode   = false;
+    p.isDrawing   = false;
+
+    document.getElementById('annotation-canvas').classList.remove('active');
+    document.getElementById('annotation-toolbar').classList.remove('visible');
+    document.getElementById('btn-annot-toggle').classList.remove('active');
+    document.getElementById('btn-clear-annot').style.display = 'none';
+
+    removeAnnotationListeners();
+  }
+
+  let _annotListeners = {};
+
+  function removeAnnotationListeners() {
+    const c = document.getElementById('annotation-canvas');
+    if (_annotListeners.down)  c.removeEventListener('mousedown',  _annotListeners.down);
+    if (_annotListeners.move)  c.removeEventListener('mousemove',  _annotListeners.move);
+    if (_annotListeners.up)    c.removeEventListener('mouseup',    _annotListeners.up);
+    if (_annotListeners.tdown) c.removeEventListener('touchstart', _annotListeners.tdown);
+    if (_annotListeners.tmove) c.removeEventListener('touchmove',  _annotListeners.tmove);
+    if (_annotListeners.tup)   c.removeEventListener('touchend',   _annotListeners.tup);
+    _annotListeners = {};
+  }
+
+  function initAnnotationDrawing() {
+    const p = state.performance;
+    const canvas = document.getElementById('annotation-canvas');
+
+    removeAnnotationListeners();
+
+    function getPos(e) {
+      const rect  = canvas.getBoundingClientRect();
+      const ratio = canvas.width / rect.width;
+      if (e.touches) {
+        return {
+          x: (e.touches[0].clientX - rect.left) * ratio,
+          y: (e.touches[0].clientY - rect.top)  * ratio
         };
+      }
+      return {
+        x: (e.clientX - rect.left) * ratio,
+        y: (e.clientY - rect.top)  * ratio
+      };
+    }
 
-        // Configuration de PDF.js (Nécessaire pour le worker)
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    function startDraw(e) {
+      e.preventDefault();
+      p.isDrawing     = true;
+      const pos       = getPos(e);
+      p.currentStroke = { color: p.annotColor, size: p.annotSize, points: [pos] };
+    }
 
-        // État global de l'application
-        let state = {
-            library: JSON.parse(localStorage.getItem('paroisse_library')) || [],
-            setlists: JSON.parse(localStorage.getItem('paroisse_setlists')) || {},
-            currentSetlistId: null,
-            annotations: JSON.parse(localStorage.getItem('paroisse_annotations')) || {}
-        };
+    function draw(e) {
+      if (!p.isDrawing || !p.currentStroke) return;
+      e.preventDefault();
+      const pos = getPos(e);
+      p.currentStroke.points.push(pos);
 
-        // Initialisation
-        async function init() {
-            renderLibrary();
-            renderSetlistsDropdown();
-            initSortable();
-            // Tente de mettre à jour la bibliothèque depuis GitHub en arrière-plan
-            fetchLibraryFromGitHub();
-        }
+      // Dessin en temps réel
+      const ctx = canvas.getContext('2d');
+      const pts = p.currentStroke.points;
+      ctx.strokeStyle = p.annotColor;
+      ctx.lineWidth   = p.annotSize;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+      ctx.beginPath();
+      if (pts.length >= 2) {
+        ctx.moveTo(pts[pts.length-2].x, pts[pts.length-2].y);
+        ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+        ctx.stroke();
+      }
+    }
 
-        // ==========================================
-        // 2. DONNÉES & GITHUB API
-        // ==========================================
-        async function fetchLibraryFromGitHub() {
-            try {
-                const url = `https://api.github.com/repos/${GITHUB_CONFIG.username}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`;
-                const response = await fetch(url);
-                if (!response.ok) throw new Error("Erreur réseau API GitHub");
-                
-                const data = await response.json();
-                
-                // Ne garder que les PDFs
-                const pdfs = data.filter(file => file.name.toLowerCase().endsWith('.pdf')).map(file => ({
-                    id: file.sha,
-                    title: formatTitle(file.name),
-                    type: 'pdf',
-                    url: file.download_url
-                }));
+    function endDraw(e) {
+      if (!p.isDrawing) return;
+      p.isDrawing = false;
+      if (p.currentStroke && p.currentStroke.points.length > 1) {
+        const key = annotKey();
+        if (!p.annotStrokes[key]) p.annotStrokes[key] = [];
+        p.annotStrokes[key].push(p.currentStroke);
+        saveAnnotations();
+      }
+      p.currentStroke = null;
+    }
 
-                // Fusionner avec les chants textes créés manuellement
-                const customSongs = state.library.filter(item => item.type === 'text');
-                state.library = [...pdfs, ...customSongs];
-                
-                localStorage.setItem('paroisse_library', JSON.stringify(state.library));
-                renderLibrary();
-            } catch (error) {
-                console.warn("Impossible de récupérer les partitions GitHub (Mode hors-ligne actif).", error);
-            }
-        }
+    _annotListeners = {
+      down:  startDraw, move: draw, up: endDraw,
+      tdown: startDraw, tmove: draw, tup: endDraw
+    };
 
-        function formatTitle(filename) {
-            return filename.replace('.pdf', '').replace(/_/g, ' ');
-        }
+    canvas.addEventListener('mousedown',  startDraw);
+    canvas.addEventListener('mousemove',  draw);
+    canvas.addEventListener('mouseup',    endDraw);
+    canvas.addEventListener('touchstart', startDraw, { passive: false });
+    canvas.addEventListener('touchmove',  draw,      { passive: false });
+    canvas.addEventListener('touchend',   endDraw);
+  }
 
-        // ==========================================
-        // 3. LOGIQUE DES VUES & INTERFACE
-        // ==========================================
-        function switchView(viewId) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(`view-${viewId}`).classList.add('active');
-            if (viewId === 'setlists') renderLibraryForSetlist();
-        }
+  function annotKey() {
+    const p = state.performance;
+    const playable = p.setlist.items.filter(i => i.type === 'song');
+    const item = playable[p.currentIndex];
+    return `${item ? item.uid : 'none'}_p${p.currentPage}`;
+  }
 
-        function openModal(id) { document.getElementById(id).classList.add('active'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+  function saveAnnotations() {
+    const all = load(STORAGE.ANNOTATIONS) || {};
+    all[annotKey()] = state.performance.annotStrokes[annotKey()] || [];
+    save(STORAGE.ANNOTATIONS, all);
+  }
 
-        // --- BIBLIOTHÈQUE ---
-        function renderLibrary() {
-            const query = document.getElementById('search-lib').value.toLowerCase();
-            const list = document.getElementById('library-list');
-            list.innerHTML = '';
+  function loadAnnotations() {
+    const all = load(STORAGE.ANNOTATIONS) || {};
+    const key = annotKey();
+    state.performance.annotStrokes[key] = all[key] || [];
+  }
 
-            const filtered = state.library.filter(s => s.title.toLowerCase().includes(query));
-            filtered.forEach(song => {
-                const li = document.createElement('li');
-                li.className = 'list-item';
-                li.innerHTML = `
-                    <span class="title">📄 ${song.title} ${song.type === 'text' ? '(Texte)' : ''}</span>
-                    <button onclick="previewSong('${song.id}')">Ouvrir</button>
-                `;
-                list.appendChild(li);
-            });
-        }
+  function redrawAnnotations() {
+    loadAnnotations();
+    const key    = annotKey();
+    const canvas = document.getElementById('annotation-canvas');
+    const ctx    = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        function saveCustomSong() {
-            const title = document.getElementById('custom-title').value;
-            const content = document.getElementById('custom-content').value;
-            if (!title) return alert('Le titre est requis.');
+    const strokes = state.performance.annotStrokes[key] || [];
+    strokes.forEach(stroke => {
+      if (!stroke.points.length) return;
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth   = stroke.size;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+      ctx.beginPath();
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      stroke.points.forEach(pt => ctx.lineTo(pt.x, pt.y));
+      ctx.stroke();
+    });
+  }
 
-            const newSong = { id: 'custom_' + Date.now(), title, type: 'text', content };
-            state.library.push(newSong);
-            localStorage.setItem('paroisse_library', JSON.stringify(state.library));
-            
-            closeModal('modal-custom-song');
-            document.getElementById('custom-title').value = '';
-            document.getElementById('custom-content').value = '';
-            renderLibrary();
-        }
+  function undoAnnotation() {
+    const key = annotKey();
+    const p   = state.performance;
+    if (!p.annotStrokes[key] || !p.annotStrokes[key].length) return;
+    p.annotStrokes[key].pop();
+    saveAnnotations();
+    redrawAnnotations();
+  }
 
-        // --- MESSES (SETLISTS) ---
-        function createSetlist() {
-            const name = document.getElementById('new-setlist-name').value;
-            if (!name) return;
-            const id = 'setlist_' + Date.now();
-            state.setlists[id] = { id, name, items: [] };
-            saveSetlists();
-            renderSetlistsDropdown();
-            document.getElementById('setlist-selector').value = id;
-            loadSetlist(id);
-            document.getElementById('new-setlist-name').value = '';
-        }
+  function clearAnnotations() {
+    if (!confirm('Effacer toutes les annotations de cette page ?')) return;
+    const key = annotKey();
+    state.performance.annotStrokes[key] = [];
+    saveAnnotations();
+    redrawAnnotations();
+  }
 
-        function renderSetlistsDropdown() {
-            const select = document.getElementById('setlist-selector');
-            select.innerHTML = '<option value="">-- Choisir une messe --</option>';
-            Object.values(state.setlists).forEach(sl => {
-                const opt = document.createElement('option');
-                opt.value = sl.id;
-                opt.textContent = sl.name;
-                select.appendChild(opt);
-            });
-        }
+  function setAnnotColor(el) {
+    state.performance.annotColor = el.dataset.color;
+    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+    el.classList.add('selected');
+  }
 
-        function loadSetlist(id) {
-            state.currentSetlistId = id;
-            renderCurrentSetlist();
-        }
+  function setAnnotSize(el) {
+    state.performance.annotSize = parseInt(el.dataset.size);
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+  }
 
-        function renderCurrentSetlist() {
-            const list = document.getElementById('setlist-builder');
-            list.innerHTML = '';
-            if (!state.currentSetlistId) return;
+  /* ----------------------------------------------------------
+     MODALES GÉNÉRIQUES
+     ---------------------------------------------------------- */
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+  }
 
-            const setlist = state.setlists[state.currentSetlistId];
-            setlist.items.forEach((item, index) => {
-                const li = document.createElement('li');
-                li.className = 'list-item setlist-item';
-                li.dataset.uid = item.uid; // Unique ID d'instance
-                li.innerHTML = `
-                    <span class="title">☰ ${item.title}</span>
-                    <button class="btn-danger" onclick="removeFromSetlist('${item.uid}')">X</button>
-                `;
-                list.appendChild(li);
-            });
-        }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+  }
 
-        function renderLibraryForSetlist() {
-            const query = document.getElementById('search-add').value.toLowerCase();
-            const list = document.getElementById('library-add-list');
-            list.innerHTML = '';
+  // Fermer les modales en cliquant sur l'overlay
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  });
 
-            const filtered = state.library.filter(s => s.title.toLowerCase().includes(query));
-            filtered.forEach(song => {
-                const li = document.createElement('li');
-                li.className = 'list-item';
-                li.innerHTML = `
-                    <span class="title">${song.title}</span>
-                    <button onclick="addToSetlist('${song.id}')">+</button>
-                `;
-                list.appendChild(li);
-            });
-        }
+  // Fermer avec Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+    }
+    // Navigation clavier en mode jeu
+    if (state.performance.active) {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') perfNavNext(null);
+      if (e.key === 'ArrowLeft'  || e.key === 'PageUp')   perfNavPrev(null);
+    }
+  });
 
-        function addToSetlist(songId) {
-            if (!state.currentSetlistId) return alert('Veuillez d\'abord sélectionner ou créer une messe.');
-            const song = state.library.find(s => s.id === songId);
-            // Ajout d'un UID car le même chant peut être ajouté plusieurs fois
-            const instance = { ...song, uid: 'inst_' + Date.now() }; 
-            state.setlists[state.currentSetlistId].items.push(instance);
-            saveSetlists();
-            renderCurrentSetlist();
-        }
+  /* ----------------------------------------------------------
+     INITIALISATION
+     ---------------------------------------------------------- */
+  function init() {
+    loadCustomSongs();
+    loadSetlists();
+    initTabs();
+    renderMassesGrid();
 
-        function removeFromSetlist(uid) {
-            const items = state.setlists[state.currentSetlistId].items;
-            state.setlists[state.currentSetlistId].items = items.filter(i => i.uid !== uid);
-            saveSetlists();
-            renderCurrentSetlist();
-        }
+    // Charger la bibliothèque (cache ou GitHub)
+    syncLibrary(false);
+  }
 
-        function addReadingToSetlist() { openModal('modal-reading'); }
-        function saveReading() {
-            if (!state.currentSetlistId) return alert('Sélectionnez une messe.');
-            const title = document.getElementById('reading-title').value;
-            const content = document.getElementById('reading-content').value;
-            const instance = { id: 'read_' + Date.now(), uid: 'inst_' + Date.now(), title, type: 'reading', content };
-            state.setlists[state.currentSetlistId].items.push(instance);
-            saveSetlists();
-            renderCurrentSetlist();
-            closeModal('modal-reading');
-            document.getElementById('reading-title').value = '';
-            document.getElementById('reading-content').value = '';
-        }
+  /* ----------------------------------------------------------
+     API PUBLIQUE
+     ---------------------------------------------------------- */
+  return {
+    // Bibliothèque
+    syncLibrary,
+    filterLibrary,
+    openAddCustomSong,
+    saveCustomSong,
+    deleteCustomSong,
+    filterModalSongs,
 
-        function saveSetlists() { localStorage.setItem('paroisse_setlists', JSON.stringify(state.setlists)); }
+    // Setlists
+    createNewSetlist,
+    confirmNewSetlist,
+    selectSetlist,
+    saveCurrentSetlist,
+    deleteCurrentSetlist,
+    deleteSetlistById,
+    openSetlistEditor,
+    removeSetlistItem,
+    openAddSongModal,
+    addSongToSetlist,
+    addLectureItem,
+    saveLectureItem,
 
-        // Initialisation du Drag & Drop (SortableJS)
-        function initSortable() {
-            const list = document.getElementById('setlist-builder');
-            new Sortable(list, {
-                animation: 150,
-                onEnd: function (evt) {
-                    if (!state.currentSetlistId) return;
-                    const items = state.setlists[state.currentSetlistId].items;
-                    // Réorganiser le tableau basé sur le DOM (UIDs)
-                    const domUids = Array.from(list.children).map(li => li.dataset.uid);
-                    state.setlists[state.currentSetlistId].items = domUids.map(uid => items.find(i => i.uid === uid));
-                    saveSetlists();
-                }
-            });
-        }
+    // Mode jeu
+    launchPerformance,
+    launchPerformanceFromId,
+    exitPerformance,
+    perfNavNext,
+    perfNavPrev,
+    togglePerfSetlist,
+    jumpToSetlistItem,
 
-        // ==========================================
-        // 4. MODE JEU (PERFORMANCE) & PDF.JS
-        // ==========================================
-        let perfState = {
-            queue: [], // Liste des chants à jouer
-            currentIndex: 0,
-            pdfDoc: null,
-            pageNum: 1,
-            isDrawing: false
-        };
+    // Annotations
+    toggleAnnotation,
+    clearAnnotations,
+    undoAnnotation,
+    setAnnotColor,
+    setAnnotSize,
 
-        const canvas = document.getElementById('pdf-canvas');
-        const ctx = canvas.getContext('2d');
-        const textRender = document.getElementById('text-render');
-        
-        // --- Contexte de dessin ---
-        const drawCanvas = document.getElementById('draw-canvas');
-        const drawCtx = drawCanvas.getContext('2d');
-        let drawingMode = false;
-        let lastX = 0; let lastY = 0;
+    // Modales
+    openModal,
+    closeModal,
 
-        function startPerformance() {
-            if (!state.currentSetlistId || state.setlists[state.currentSetlistId].items.length === 0) return;
-            perfState.queue = state.setlists[state.currentSetlistId].items;
-            perfState.currentIndex = 0;
-            
-            document.getElementById('view-performance').classList.add('active');
-            loadPerformanceItem(perfState.currentIndex);
-        }
+    // Démarrage
+    init,
+  };
 
-        function exitPerformance() {
-            document.getElementById('view-performance').classList.remove('active');
-            perfState.pdfDoc = null;
-        }
+})();
 
-        function toggleToolbar() {
-            if(drawingMode) return; // Ne pas cacher si on dessine
-            document.getElementById('perf-toolbar').classList.toggle('hidden');
-        }
-
-        async function loadPerformanceItem(index, targetLastPage = false) {
-            if (index < 0 || index >= perfState.queue.length) {
-                exitPerformance();
-                return;
-            }
-
-            const item = perfState.queue[index];
-            document.getElementById('perf-title').textContent = `${index + 1}/${perfState.queue.length} - ${item.title}`;
-            clearCanvas();
-            
-            if (item.type === 'pdf') {
-                textRender.style.display = 'none';
-                canvas.style.display = 'block';
-                drawCanvas.style.display = 'block';
-                
-                try {
-                    const loadingTask = pdfjsLib.getDocument(item.url);
-                    perfState.pdfDoc = await loadingTask.promise;
-                    perfState.pageNum = targetLastPage ? perfState.pdfDoc.numPages : 1;
-                    renderPage(perfState.pageNum);
-                } catch (err) {
-                    console.error("Erreur chargement PDF", err);
-                    textRender.style.display = 'block';
-                    textRender.textContent = "Erreur lors du chargement du PDF.\nVérifiez votre connexion internet.";
-                }
-            } else {
-                // Texte ou Lecture
-                perfState.pdfDoc = null;
-                canvas.style.display = 'none';
-                drawCanvas.style.display = 'none';
-                textRender.style.display = 'block';
-                textRender.textContent = item.content;
-            }
-        }
-
-        async function renderPage(num) {
-            if (!perfState.pdfDoc) return;
-            const page = await perfState.pdfDoc.getPage(num);
-            
-            // Calculer l'échelle pour s'adapter à l'écran
-            const container = document.getElementById('perf-container');
-            const viewportUnscaled = page.getViewport({ scale: 1 });
-            const scale = Math.min(container.clientWidth / viewportUnscaled.width, container.clientHeight / viewportUnscaled.height);
-            const viewport = page.getViewport({ scale });
-
-            // Ajuster les canvas
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            drawCanvas.height = viewport.height;
-            drawCanvas.width = viewport.width;
-
-            const renderContext = { canvasContext: ctx, viewport: viewport };
-            await page.render(renderContext).promise;
-            
-            loadAnnotations();
-        }
-
-        function clearCanvas() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-        }
-
-        // --- NAVIGATION TACTILE LOGIQUE CROISÉE ---
-        function nextPage() {
-            if(drawingMode) return;
-            const item = perfState.queue[perfState.currentIndex];
-            
-            if (item.type !== 'pdf' || !perfState.pdfDoc) {
-                // Si c'est du texte, on passe au chant suivant
-                perfState.currentIndex++;
-                loadPerformanceItem(perfState.currentIndex);
-            } else {
-                if (perfState.pageNum >= perfState.pdfDoc.numPages) {
-                    perfState.currentIndex++;
-                    loadPerformanceItem(perfState.currentIndex);
-                } else {
-                    perfState.pageNum++;
-                    renderPage(perfState.pageNum);
-                }
-            }
-        }
-
-        function prevPage() {
-            if(drawingMode) return;
-            const item = perfState.queue[perfState.currentIndex];
-
-            if (item.type !== 'pdf' || !perfState.pdfDoc) {
-                perfState.currentIndex--;
-                loadPerformanceItem(perfState.currentIndex, true);
-            } else {
-                if (perfState.pageNum <= 1) {
-                    perfState.currentIndex--;
-                    // true demande de cibler la DERNIÈRE page du chant précédent s'il s'agit d'un PDF
-                    loadPerformanceItem(perfState.currentIndex, true);
-                } else {
-                    perfState.pageNum--;
-                    renderPage(perfState.pageNum);
-                }
-            }
-        }
-
-        // ==========================================
-        // 5. ANNOTATIONS (DESSIN SUR CALQUE)
-        // ==========================================
-        function toggleDrawing() {
-            drawingMode = !drawingMode;
-            const btn = document.getElementById('btn-draw');
-            if (drawingMode) {
-                btn.style.backgroundColor = 'var(--primary-color)';
-                btn.style.color = '#000';
-                drawCanvas.classList.add('drawing-active');
-                // Empêcher la toolbar de disparaître
-                document.getElementById('perf-toolbar').classList.remove('hidden');
-            } else {
-                btn.style.backgroundColor = '';
-                btn.style.color = '';
-                drawCanvas.classList.remove('drawing-active');
-            }
-        }
-
-        function getDrawKey() {
-            const item = perfState.queue[perfState.currentIndex];
-            return `${item.id}_page_${perfState.pageNum}`;
-        }
-
-        function loadAnnotations() {
-            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-            const key = getDrawKey();
-            if (state.annotations[key]) {
-                const img = new Image();
-                img.onload = () => drawCtx.drawImage(img, 0, 0, drawCanvas.width, drawCanvas.height);
-                img.src = state.annotations[key];
-            }
-        }
-
-        function saveAnnotations() {
-            const key = getDrawKey();
-            state.annotations[key] = drawCanvas.toDataURL();
-            localStorage.setItem('paroisse_annotations', JSON.stringify(state.annotations));
-        }
-
-        // Gestion des événements de dessin
-        function getPointerPos(e) {
-            const rect = drawCanvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            // Échelle entre la taille d'affichage CSS et la résolution réelle du canvas
-            const scaleX = drawCanvas.width / rect.width;
-            const scaleY = drawCanvas.height / rect.height;
-            
-            return {
-                x: (clientX - rect.left) * scaleX,
-                y: (clientY - rect.top) * scaleY
-            };
-        }
-
-        function startDrawing(e) {
-            if (!drawingMode) return;
-            e.preventDefault();
-            perfState.isDrawing = true;
-            const pos = getPointerPos(e);
-            lastX = pos.x; lastY = pos.y;
-        }
-
-        function draw(e) {
-            if (!perfState.isDrawing || !drawingMode) return;
-            e.preventDefault();
-            const pos = getPointerPos(e);
-            
-            drawCtx.beginPath();
-            drawCtx.moveTo(lastX, lastY);
-            drawCtx.lineTo(pos.x, pos.y);
-            drawCtx.strokeStyle = 'red';
-            drawCtx.lineWidth = 3;
-            drawCtx.lineCap = 'round';
-            drawCtx.stroke();
-            
-            lastX = pos.x; lastY = pos.y;
-        }
-
-        function stopDrawing() {
-            if (perfState.isDrawing) {
-                perfState.isDrawing = false;
-                saveAnnotations();
-            }
-        }
-
-        drawCanvas.addEventListener('mousedown', startDrawing);
-        drawCanvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDrawing);
-        
-        drawCanvas.addEventListener('touchstart', startDrawing, {passive: false});
-        drawCanvas.addEventListener('touchmove', draw, {passive: false});
-        window.addEventListener('touchend', stopDrawing);
-
-        // Lancement
-        document.addEventListener('DOMContentLoaded', init);
-
-    </script>
+/* ============================================================
+   DÉMARRAGE
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  App.init();
+});
+</script>
 </body>
 </html>
