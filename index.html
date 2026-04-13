@@ -53,11 +53,15 @@
 
         main { flex: 1; overflow-y: auto; padding: 15px; }
 
-        .search-bar {
-            width: 100%; padding: 15px; border-radius: 8px;
+        .search-bar, .input-field {
+            width: 100%; padding: 12px; border-radius: 8px;
             border: 1px solid var(--border-color);
-            background: #252525; color: white; margin-bottom: 15px;
-            font-size: 1.1rem;
+            background: #252525; color: white; margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        textarea.input-field {
+            height: 80px; resize: none; font-family: inherit;
         }
 
         .song-card {
@@ -81,36 +85,72 @@
         }
 
         canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        
+        #text-display {
+            display: none; color: white; text-align: center;
+            padding: 40px; max-width: 90vw; overflow-y: auto; max-height: 80vh;
+        }
+        
+        #note-title-display { 
+            font-size: 2rem; color: var(--primary-color); 
+            margin-bottom: 30px; font-weight: bold; 
+            text-transform: uppercase;
+        }
+        #note-content-display { 
+            font-size: 2.2rem; white-space: pre-wrap; 
+            line-height: 1.4; word-break: break-word;
+        }
 
-        .tap-zone { position: absolute; top: 0; height: 100%; width: 20%; z-index: 100; }
+        .tap-zone { position: absolute; top: 0; height: 100%; width: 20%; z-index: 100; cursor: pointer; }
         .tap-left { left: 0; }
         .tap-right { right: 0; }
 
         #perf-toolbar {
             position: absolute; top: 0; width: 100%;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
             padding: 10px 20px; display: flex; justify-content: space-between;
             align-items: center; z-index: 200;
-            transform: translateY(-100%);
-            transition: transform 0.2s ease-in-out;
+            transform: translateY(-100%); transition: transform 0.2s ease-in-out;
         }
         #performance-mode.show-ui #perf-toolbar { transform: translateY(0); }
 
         /* --- ÉDITEUR DE MESSE --- */
-        .editor-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
-            height: calc(100vh - 200px);
+        .editor-grid { 
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; 
+            height: calc(100vh - 220px); 
         }
-        .col { background: var(--surface-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; }
-        .list-box { flex: 1; overflow-y: auto; border: 1px solid #333; border-radius: 8px; margin-top: 10px; }
-        .item { padding: 12px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .col { 
+            background: var(--surface-color); border-radius: 12px; 
+            padding: 15px; display: flex; flex-direction: column; 
+        }
+        .list-box { 
+            flex: 1; overflow-y: auto; border: 1px solid #333; 
+            border-radius: 8px; margin-top: 10px; 
+        }
+        .item { 
+            padding: 12px; border-bottom: 1px solid #333; 
+            display: flex; align-items: center; gap: 10px; cursor: pointer; 
+        }
+        .item:hover { background: #2a2a2a; }
+        .item-note { 
+            border-left: 4px solid var(--primary-color); background: #222; 
+        }
+        .note-form { 
+            background: #252525; padding: 10px; 
+            border-radius: 8px; margin-bottom: 10px; 
+        }
+
+        @media (max-width: 768px) {
+            .editor-grid { grid-template-columns: 1fr; height: auto; }
+            .col { height: 400px; margin-bottom: 15px; }
+        }
     </style>
 </head>
 <body>
 
 <div id="app">
     <header>
-        <h2 style="margin:0">Cantus</h2>
+        <h2 style="margin:0">CANTUS</h2>
         <div id="sync-status" style="font-size: 0.7rem; color: #666;">Prêt</div>
     </header>
     <nav>
@@ -125,7 +165,7 @@
         <button class="btn btn-primary" onclick="exitPerformance()"><i class="fas fa-arrow-left"></i> Quitter</button>
         <div style="text-align: center">
             <div id="perf-song-name" style="font-weight:bold; font-size:1.1rem">CHANT</div>
-            <div id="perf-page-count" style="font-size:0.8rem; color:#aaa">Page 1 / 1</div>
+            <div id="perf-page-count" style="font-size:0.8rem; color:#aaa">1 / 1</div>
         </div>
         <div style="width:50px"></div>
     </div>
@@ -133,7 +173,13 @@
     <div id="pdf-viewport" onclick="handleCenterTap(event)">
         <div class="tap-zone tap-left" onclick="prevPage(event)"></div>
         <div class="tap-zone tap-right" onclick="nextPage(event)"></div>
+        
         <canvas id="pdf-canvas"></canvas>
+        
+        <div id="text-display">
+            <div id="note-title-display"></div>
+            <div id="note-content-display"></div>
+        </div>
     </div>
 </div>
 
@@ -148,7 +194,7 @@
 
     let state = {
         songs: [],
-        messes: JSON.parse(localStorage.getItem('messes_v2')) || [],
+        messes: JSON.parse(localStorage.getItem('cantus_messes')) || [],
         currentMesseIdx: null,
         activeSet: [],
         currentIdx: 0,
@@ -167,28 +213,29 @@
             const d = await r.json();
             state.songs = d.filter(f => f.name.endsWith('.pdf')).map(f => ({
                 id: f.sha,
-                // On met tout en majuscules dès le chargement
+                type: 'song',
                 name: f.name.replace('.pdf', '').replace(/_/g, ' ').toUpperCase(),
                 url: f.download_url
             }));
-            localStorage.setItem('cache_songs', JSON.stringify(state.songs));
+            localStorage.setItem('cantus_cache', JSON.stringify(state.songs));
             document.getElementById('sync-status').innerText = "À jour";
         } catch(e) {
-            let cached = JSON.parse(localStorage.getItem('cache_songs')) || [];
-            // Assure que le cache est aussi en majuscule si c'est une ancienne version sauvegardée
-            state.songs = cached.map(s => ({ ...s, name: s.name.toUpperCase() }));
-            document.getElementById('sync-status').innerText = "Mode Hors-ligne";
+            let cached = JSON.parse(localStorage.getItem('cantus_cache')) || [];
+            state.songs = cached.map(s => ({ ...s, name: s.name.toUpperCase(), type: 'song' }));
+            document.getElementById('sync-status').innerText = "Hors-ligne";
         }
     }
 
     function showView(v) {
         const c = document.getElementById('content');
         if(v === 'library') {
-            c.innerHTML = `<input type="text" class="search-bar" placeholder="Rechercher un chant..." oninput="searchSongs(this.value)">
-                           <div id="lib-list">${renderList(state.songs)}</div>`;
+            c.innerHTML = `
+                <input type="text" class="search-bar" placeholder="Rechercher un chant..." oninput="searchLibrary(this.value)">
+                <div id="lib-list">${renderList(state.songs)}</div>`;
         } else if(v === 'planner') {
-            c.innerHTML = `<button class="btn btn-primary" onclick="newMesse()" style="width:100%; margin-bottom:15px;">+ Nouvelle Messe</button>
-                           <div id="messes-list">${renderMesses()}</div>`;
+            c.innerHTML = `
+                <button class="btn btn-primary" onclick="newMesse()" style="width:100%; margin-bottom:15px;">+ Nouvelle Messe</button>
+                <div id="messes-list">${renderMesses()}</div>`;
         }
     }
 
@@ -203,9 +250,11 @@
     }
 
     function renderMesses() {
+        if(state.messes.length === 0) return "<div style='text-align:center; color:#666; padding:20px;'>Aucune messe programmée.</div>";
+        
         return state.messes.map((m, i) => `
             <div class="song-card">
-                <span><strong>${m.name}</strong> (${m.songs.length} titres)</span>
+                <span><strong>${m.name}</strong> (${m.songs.length} éléments)</span>
                 <div style="display:flex; gap:8px">
                     <button class="btn" onclick="editMesse(${i})"><i class="fas fa-edit"></i></button>
                     <button class="btn btn-accent" onclick="startPerformance(state.messes[${i}].songs)"><i class="fas fa-play"></i></button>
@@ -214,24 +263,20 @@
     }
 
     // --- RECHERCHE INTELLIGENTE ---
-    // Cette fonction normalise le texte: enlève accents, majuscules, ponctuation et gère St/Saint
     function normalizeSearch(str) {
         if (!str) return "";
         return str.toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Enlève les accents
-            .replace(/[-_,'".]/g, " ") // Remplace les tirets, virgules, etc. par des espaces
-            .replace(/\bsaint\b/g, "st") // Remplace le mot "saint" par "st"
-            .replace(/\bsainte\b/g, "ste") // Remplace le mot "sainte" par "ste"
-            .replace(/\s+/g, " ") // Évite les espaces multiples
+            .replace(/[-_,'".]/g, " ") // Remplace ponctuation par espace
+            .replace(/\bsaint\b/g, "st") // saint -> st
+            .replace(/\bsainte\b/g, "ste") // sainte -> ste
+            .replace(/\s+/g, " ") // Évite espaces multiples
             .trim();
     }
 
-    function searchSongs(query) {
-        const normQuery = normalizeSearch(query);
-        const filtered = state.songs.filter(s => {
-            const normName = normalizeSearch(s.name);
-            return normName.includes(normQuery);
-        });
+    function searchLibrary(query) {
+        const q = normalizeSearch(query);
+        const filtered = state.songs.filter(s => normalizeSearch(s.name).includes(q));
         document.getElementById('lib-list').innerHTML = renderList(filtered);
     }
 
@@ -247,22 +292,44 @@
         state.activeSet = setlist;
         state.currentIdx = 0;
         
-        // Passer en plein écran
         const el = document.documentElement;
         if (el.requestFullscreen) el.requestFullscreen();
         
         document.getElementById('performance-mode').style.display = 'flex';
-        await loadDoc(state.activeSet[0].url);
+        // Force affichage de la toolbar au début
+        document.getElementById('performance-mode').classList.add('show-ui');
+        setTimeout(() => { document.getElementById('performance-mode').classList.remove('show-ui'); }, 3000);
+        
+        await loadItem();
     }
 
-    async function loadDoc(url) {
-        document.getElementById('perf-song-name').innerText = state.activeSet[state.currentIdx].name;
-        state.pdf = await pdfjsLib.getDocument(url).promise;
-        state.pageNum = 1;
-        renderPage();
+    async function loadItem() {
+        const item = state.activeSet[state.currentIdx];
+        const canvas = document.getElementById('pdf-canvas');
+        const textDisplay = document.getElementById('text-display');
+        
+        document.getElementById('perf-song-name').innerText = item.name.toUpperCase();
+
+        if (item.type === 'note') {
+            // Affichage Note / Texte
+            canvas.style.display = 'none';
+            textDisplay.style.display = 'block';
+            document.getElementById('note-title-display').innerText = item.name;
+            document.getElementById('note-content-display').innerText = item.content || "";
+            document.getElementById('perf-page-count').innerText = `Élém. ${state.currentIdx + 1} / ${state.activeSet.length}`;
+            state.pdf = null;
+        } else {
+            // Affichage PDF
+            canvas.style.display = 'block';
+            textDisplay.style.display = 'none';
+            state.pdf = await pdfjsLib.getDocument(item.url).promise;
+            state.pageNum = 1;
+            renderPage();
+        }
     }
 
     async function renderPage() {
+        if (!state.pdf) return;
         const page = await state.pdf.getPage(state.pageNum);
         const canvas = document.getElementById('pdf-canvas');
         const ctx = canvas.getContext('2d');
@@ -271,48 +338,52 @@
         const scale = Math.min(window.innerWidth / unscaledViewport.width, window.innerHeight / unscaledViewport.height);
         const viewport = page.getViewport({ scale: scale * window.devicePixelRatio });
 
-        canvas.width = viewport.width;
+        canvas.width = viewport.width; 
         canvas.height = viewport.height;
         canvas.style.width = (viewport.width / window.devicePixelRatio) + "px";
         canvas.style.height = (viewport.height / window.devicePixelRatio) + "px";
-
+        
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
         document.getElementById('perf-page-count').innerText = 
-            `Chant ${state.currentIdx + 1}/${state.activeSet.length} • Page ${state.pageNum}/${state.pdf.numPages}`;
+            `Élém. ${state.currentIdx + 1}/${state.activeSet.length} • Page ${state.pageNum}/${state.pdf.numPages}`;
     }
 
     function nextPage(e) {
         if(e) e.stopPropagation();
-        if(state.pageNum < state.pdf.numPages) {
-            state.pageNum++; renderPage();
-        } else if(state.currentIdx < state.activeSet.length - 1) {
-            state.currentIdx++; loadDoc(state.activeSet[state.currentIdx].url);
+        if(state.pdf && state.pageNum < state.pdf.numPages) { 
+            state.pageNum++; renderPage(); 
+        } else if(state.currentIdx < state.activeSet.length - 1) { 
+            state.currentIdx++; loadItem(); 
         }
     }
 
     function prevPage(e) {
         if(e) e.stopPropagation();
-        if(state.pageNum > 1) {
-            state.pageNum--; renderPage();
-        } else if(state.currentIdx > 0) {
-            state.currentIdx--; loadDoc(state.activeSet[state.currentIdx].url);
+        if(state.pdf && state.pageNum > 1) { 
+            state.pageNum--; renderPage(); 
+        } else if(state.currentIdx > 0) { 
+            state.currentIdx--; loadItem(); 
         }
     }
 
-    function handleCenterTap(e) {
-        document.getElementById('performance-mode').classList.toggle('show-ui');
+    function handleCenterTap(e) { 
+        document.getElementById('performance-mode').classList.toggle('show-ui'); 
     }
 
-    function exitPerformance() {
+    function exitPerformance() { 
         if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
-        document.getElementById('performance-mode').style.display = 'none';
-        state.pdf = null;
+        document.getElementById('performance-mode').style.display = 'none'; 
+        state.pdf = null; 
     }
 
-    // --- GESTION MESSES ---
+    // --- GESTION MESSES (ÉDITEUR) ---
     function newMesse() { 
-        const n = prompt("Nom de la Messe :"); 
-        if(n) { state.messes.push({name: n, songs: []}); save(); showView('planner'); }
+        const n = prompt("Nom de la Messe (ex: Dimanche 12 Mai) :"); 
+        if(n) { 
+            state.messes.push({name: n, songs: []}); 
+            saveMesses(); 
+            showView('planner'); 
+        }
     }
 
     function editMesse(idx) {
@@ -320,60 +391,122 @@
         const m = state.messes[idx];
         document.getElementById('content').innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <button class="btn" onclick="showView('planner')">Retour</button>
-                <h3>${m.name}</h3>
+                <button class="btn" onclick="showView('planner')"><i class="fas fa-arrow-left"></i> Retour</button>
+                <h3 style="margin:0">${m.name}</h3>
                 <button class="btn btn-accent" onclick="deleteMesse(${idx})"><i class="fas fa-trash"></i></button>
             </div>
+            
             <div class="editor-grid">
                 <div class="col">
-                    <input type="text" class="search-bar" style="margin:0" placeholder="Filtrer..." oninput="filterEditor(this.value)">
+                    <input type="text" class="search-bar" style="margin:0" placeholder="Chercher un PDF à ajouter..." oninput="filterEditor(this.value)">
                     <div id="editor-lib" class="list-box">
                         ${renderEditorList(state.songs)}
                     </div>
                 </div>
+                
                 <div class="col">
-                    <div id="messe-sortable" class="list-box">
-                        ${m.songs.map((s, i) => `<div class="item" data-id="${i}"><i class="fas fa-bars"></i> ${s.name}</div>`).join('')}
+                    <div class="note-form">
+                        <input type="text" id="note-title" class="input-field" placeholder="Titre de la note (ex: PREMIÈRE LECTURE)">
+                        <textarea id="note-content" class="input-field" placeholder="Contenu (texte, accords...)"></textarea>
+                        <button class="btn btn-primary" style="width:100%" onclick="addNote()">
+                            <i class="fas fa-plus"></i> Ajouter cette note
+                        </button>
+                    </div>
+                    
+                    <div id="messe-sortable" class="list-box" style="margin-top:0">
+                        ${m.songs.map((s, i) => `
+                            <div class="item ${s.type === 'note' ? 'item-note' : ''}" data-id="${i}">
+                                <i class="fas ${s.type === 'note' ? 'fa-align-left' : 'fa-file-pdf'}" style="color:#888; cursor:grab;"></i> 
+                                <span style="flex:1; font-weight:500;">${s.name}</span>
+                                <button class="btn" style="padding: 8px; background:transparent; color:#ff1744;" onclick="removeSongFromMesse(${i})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             </div>`;
         
+        // Initialisation du Drag & Drop
         new Sortable(document.getElementById('messe-sortable'), {
             animation: 150,
+            handle: '.fa-file-pdf, .fa-align-left', // Restreint la zone de drag à l'icône pour éviter les conflits
             onEnd: (e) => {
                 const songs = state.messes[state.currentMesseIdx].songs;
-                const item = songs.splice(e.oldIndex, 1)[0];
-                songs.splice(e.newIndex, 0, item);
-                save();
+                const itemToMove = songs.splice(e.oldIndex, 1)[0];
+                songs.splice(e.newIndex, 0, itemToMove);
+                saveMesses();
+                editMesse(state.currentMesseIdx); // Re-render pour MAJ visuelle correcte
             }
         });
     }
 
-    // Fonction ajoutée pour gérer la recherche intelligente dans l'éditeur
+    function renderEditorList(list) {
+        return list.map(s => `
+            <div class="item" onclick="addSongToMesse('${s.id}')">
+                <i class="fas fa-plus" style="color:#2979ff"></i> ${s.name}
+            </div>`).join('');
+    }
+
     function filterEditor(query) {
-        const normQuery = normalizeSearch(query);
-        const filtered = state.songs.filter(s => {
-            const normName = normalizeSearch(s.name);
-            return normName.includes(normQuery);
-        });
+        const q = normalizeSearch(query);
+        const filtered = state.songs.filter(s => normalizeSearch(s.name).includes(q));
         document.getElementById('editor-lib').innerHTML = renderEditorList(filtered);
     }
 
-    function renderEditorList(list) {
-        return list.map(s => `<div class="item" onclick="addSong('${s.id}')">${s.name}</div>`).join('');
-    }
-
-    function addSong(id) {
+    function addSongToMesse(id) {
         const s = state.songs.find(x => x.id === id);
         state.messes[state.currentMesseIdx].songs.push({...s});
-        save(); editMesse(state.currentMesseIdx);
+        saveMesses(); 
+        editMesse(state.currentMesseIdx);
     }
 
-    function save() { localStorage.setItem('messes_v2', JSON.stringify(state.messes)); }
-    function deleteMesse(i) { if(confirm("Supprimer ?")) { state.messes.splice(i,1); save(); showView('planner'); } }
+    function addNote() {
+        const titleInput = document.getElementById('note-title');
+        const contentInput = document.getElementById('note-content');
+        
+        const title = titleInput.value.trim();
+        const content = contentInput.value.trim();
+        
+        if (title) {
+            state.messes[state.currentMesseIdx].songs.push({ 
+                type: 'note', 
+                name: title.toUpperCase(), 
+                content: content 
+            });
+            saveMesses(); 
+            editMesse(state.currentMesseIdx);
+        } else {
+            alert("Veuillez donner au moins un titre à votre note (ex: Accueil, Psaume...).");
+        }
+    }
 
-    window.addEventListener('resize', () => { if(state.pdf) renderPage(); });
+    function removeSongFromMesse(indexInMesse) {
+        state.messes[state.currentMesseIdx].songs.splice(indexInMesse, 1);
+        saveMesses(); 
+        editMesse(state.currentMesseIdx);
+    }
 
+    function saveMesses() { 
+        localStorage.setItem('cantus_messes', JSON.stringify(state.messes)); 
+    }
+    
+    function deleteMesse(i) { 
+        if(confirm("Êtes-vous sûr de vouloir supprimer cette messe entière ?")) { 
+            state.messes.splice(i,1); 
+            saveMesses(); 
+            showView('planner'); 
+        } 
+    }
+
+    // Gestion du redimensionnement de la fenêtre pour le PDF
+    window.addEventListener('resize', () => { 
+        if(state.pdf && document.getElementById('performance-mode').style.display === 'flex') {
+            renderPage(); 
+        }
+    });
+
+    // Lancement au démarrage
     init();
 </script>
 </body>
