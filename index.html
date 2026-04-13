@@ -8,6 +8,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
     <style>
         :root {
@@ -47,7 +50,9 @@
             background: #333; color: white; border: none;
             padding: 12px 20px; border-radius: 8px;
             cursor: pointer; font-size: 1rem; display: flex; align-items: center; gap: 8px;
+            justify-content: center;
         }
+        .btn:active { opacity: 0.8; }
         .btn-primary { background: var(--primary-color); }
         .btn-accent { background: var(--accent-color); }
 
@@ -60,9 +65,7 @@
             font-size: 1rem;
         }
 
-        textarea.input-field {
-            height: 80px; resize: none; font-family: inherit;
-        }
+        textarea.input-field { height: 80px; resize: none; font-family: inherit; }
 
         .song-card {
             background: var(--surface-color);
@@ -93,8 +96,7 @@
         
         #note-title-display { 
             font-size: 2rem; color: var(--primary-color); 
-            margin-bottom: 30px; font-weight: bold; 
-            text-transform: uppercase;
+            margin-bottom: 30px; font-weight: bold; text-transform: uppercase;
         }
         #note-content-display { 
             font-size: 2.2rem; white-space: pre-wrap; 
@@ -115,30 +117,25 @@
         #performance-mode.show-ui #perf-toolbar { transform: translateY(0); }
 
         /* --- ÉDITEUR DE MESSE --- */
-        .editor-grid { 
-            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; 
-            height: calc(100vh - 220px); 
-        }
-        .col { 
-            background: var(--surface-color); border-radius: 12px; 
-            padding: 15px; display: flex; flex-direction: column; 
-        }
-        .list-box { 
-            flex: 1; overflow-y: auto; border: 1px solid #333; 
-            border-radius: 8px; margin-top: 10px; 
-        }
-        .item { 
-            padding: 12px; border-bottom: 1px solid #333; 
-            display: flex; align-items: center; gap: 10px; cursor: pointer; 
-        }
+        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; height: calc(100vh - 220px); }
+        .col { background: var(--surface-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; }
+        .list-box { flex: 1; overflow-y: auto; border: 1px solid #333; border-radius: 8px; margin-top: 10px; }
+        .item { padding: 12px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; cursor: pointer; }
         .item:hover { background: #2a2a2a; }
-        .item-note { 
-            border-left: 4px solid var(--primary-color); background: #222; 
+        .item-note { border-left: 4px solid var(--primary-color); background: #222; }
+        .note-form { background: #252525; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+
+        /* --- MODAL EXPORT --- */
+        #export-modal {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.85); z-index: 5000; display: none;
+            justify-content: center; align-items: center; backdrop-filter: blur(5px);
         }
-        .note-form { 
-            background: #252525; padding: 10px; 
-            border-radius: 8px; margin-bottom: 10px; 
+        .modal-content {
+            background: var(--surface-color); padding: 25px; border-radius: 12px;
+            max-width: 90vw; width: 400px; text-align: center; border: 1px solid var(--border-color);
         }
+        #qr-code-img { margin: 20px auto; display: block; border: 10px solid white; border-radius: 8px; }
 
         @media (max-width: 768px) {
             .editor-grid { grid-template-columns: 1fr; height: auto; }
@@ -160,6 +157,23 @@
     <main id="content"></main>
 </div>
 
+<input type="file" id="file-import" accept=".json" style="display: none;" onchange="handleFileImport(event)">
+
+<div id="export-modal">
+    <div class="modal-content">
+        <h3 id="export-title" style="margin-top:0">Exporter la messe</h3>
+        <p style="font-size:0.9rem; color:#aaa;">Scannez ce QR Code avec la tablette, ou copiez le lien.</p>
+        
+        <canvas id="qr-code-img"></canvas>
+        
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
+            <button class="btn btn-primary" onclick="copyExportLink()"><i class="fas fa-link"></i> Copier le lien</button>
+            <button class="btn" onclick="downloadExportFile()"><i class="fas fa-download"></i> Télécharger Fichier (.json)</button>
+            <button class="btn" style="background:#444;" onclick="closeModal()"><i class="fas fa-times"></i> Fermer</button>
+        </div>
+    </div>
+</div>
+
 <div id="performance-mode">
     <div id="perf-toolbar">
         <button class="btn btn-primary" onclick="exitPerformance()"><i class="fas fa-arrow-left"></i> Quitter</button>
@@ -173,9 +187,7 @@
     <div id="pdf-viewport" onclick="handleCenterTap(event)">
         <div class="tap-zone tap-left" onclick="prevPage(event)"></div>
         <div class="tap-zone tap-right" onclick="nextPage(event)"></div>
-        
         <canvas id="pdf-canvas"></canvas>
-        
         <div id="text-display">
             <div id="note-title-display"></div>
             <div id="note-content-display"></div>
@@ -199,12 +211,41 @@
         activeSet: [],
         currentIdx: 0,
         pdf: null,
-        pageNum: 1
+        pageNum: 1,
+        exportUrlCache: '',
+        exportJsonCache: ''
     };
 
     async function init() {
+        // 1. Vérifier si on arrive depuis un lien d'importation (Scanner un QR Code)
+        const urlParams = new URLSearchParams(window.location.search);
+        const importData = urlParams.get('import');
+        
+        if (importData) {
+            try {
+                const jsonString = LZString.decompressFromEncodedURIComponent(importData);
+                const importedMesse = JSON.parse(jsonString);
+                state.messes.push(importedMesse);
+                saveMesses();
+                
+                // Nettoyer l'URL pour éviter de réimporter à chaque rafraîchissement
+                window.history.replaceState({}, document.title, window.location.pathname);
+                alert(`Succès ! La messe "${importedMesse.name}" a été importée dans votre appareil.`);
+            } catch (e) {
+                alert("Erreur lors de l'importation. Le lien est peut-être corrompu ou trop ancien.");
+                console.error(e);
+            }
+        }
+
+        // 2. Charger la bibliothèque normalement
         await loadLibrary();
-        showView('library');
+        
+        // 3. Si on vient d'importer, afficher directement l'onglet Messes
+        if (importData) {
+            showView('planner');
+        } else {
+            showView('library');
+        }
     }
 
     async function loadLibrary() {
@@ -234,7 +275,10 @@
                 <div id="lib-list">${renderList(state.songs)}</div>`;
         } else if(v === 'planner') {
             c.innerHTML = `
-                <button class="btn btn-primary" onclick="newMesse()" style="width:100%; margin-bottom:15px;">+ Nouvelle Messe</button>
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <button class="btn btn-primary" onclick="newMesse()" style="flex:1;">+ Nouvelle Messe</button>
+                    <button class="btn" onclick="document.getElementById('file-import').click()" title="Importer un fichier JSON"><i class="fas fa-file-import"></i></button>
+                </div>
                 <div id="messes-list">${renderMesses()}</div>`;
         }
     }
@@ -243,9 +287,7 @@
         return list.map(s => `
             <div class="song-card">
                 <span style="font-weight: 500;">${s.name}</span>
-                <button class="btn btn-primary" onclick="playSingle('${s.id}')">
-                    <i class="fas fa-play"></i> Lire
-                </button>
+                <button class="btn btn-primary" onclick="playSingle('${s.id}')"><i class="fas fa-play"></i> Lire</button>
             </div>`).join('');
     }
 
@@ -256,8 +298,9 @@
             <div class="song-card">
                 <span><strong>${m.name}</strong> (${m.songs.length} éléments)</span>
                 <div style="display:flex; gap:8px">
-                    <button class="btn" onclick="editMesse(${i})"><i class="fas fa-edit"></i></button>
-                    <button class="btn btn-accent" onclick="startPerformance(state.messes[${i}].songs)"><i class="fas fa-play"></i></button>
+                    <button class="btn" onclick="openExportModal(${i})" title="Partager / Exporter vers Tablette"><i class="fas fa-share-alt"></i></button>
+                    <button class="btn" onclick="editMesse(${i})" title="Modifier"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-accent" onclick="startPerformance(state.messes[${i}].songs)" title="Jouer"><i class="fas fa-play"></i></button>
                 </div>
             </div>`).join('');
     }
@@ -266,12 +309,8 @@
     function normalizeSearch(str) {
         if (!str) return "";
         return str.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Enlève les accents
-            .replace(/[-_,'".]/g, " ") // Remplace ponctuation par espace
-            .replace(/\bsaint\b/g, "st") // saint -> st
-            .replace(/\bsainte\b/g, "ste") // sainte -> ste
-            .replace(/\s+/g, " ") // Évite espaces multiples
-            .trim();
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[-_,'".]/g, " ").replace(/\bsaint\b/g, "st").replace(/\bsainte\b/g, "ste").replace(/\s+/g, " ").trim();
     }
 
     function searchLibrary(query) {
@@ -296,7 +335,6 @@
         if (el.requestFullscreen) el.requestFullscreen();
         
         document.getElementById('performance-mode').style.display = 'flex';
-        // Force affichage de la toolbar au début
         document.getElementById('performance-mode').classList.add('show-ui');
         setTimeout(() => { document.getElementById('performance-mode').classList.remove('show-ui'); }, 3000);
         
@@ -311,7 +349,6 @@
         document.getElementById('perf-song-name').innerText = item.name.toUpperCase();
 
         if (item.type === 'note') {
-            // Affichage Note / Texte
             canvas.style.display = 'none';
             textDisplay.style.display = 'block';
             document.getElementById('note-title-display').innerText = item.name;
@@ -319,7 +356,6 @@
             document.getElementById('perf-page-count').innerText = `Élém. ${state.currentIdx + 1} / ${state.activeSet.length}`;
             state.pdf = null;
         } else {
-            // Affichage PDF
             canvas.style.display = 'block';
             textDisplay.style.display = 'none';
             state.pdf = await pdfjsLib.getDocument(item.url).promise;
@@ -338,52 +374,36 @@
         const scale = Math.min(window.innerWidth / unscaledViewport.width, window.innerHeight / unscaledViewport.height);
         const viewport = page.getViewport({ scale: scale * window.devicePixelRatio });
 
-        canvas.width = viewport.width; 
-        canvas.height = viewport.height;
+        canvas.width = viewport.width; canvas.height = viewport.height;
         canvas.style.width = (viewport.width / window.devicePixelRatio) + "px";
         canvas.style.height = (viewport.height / window.devicePixelRatio) + "px";
         
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-        document.getElementById('perf-page-count').innerText = 
-            `Élém. ${state.currentIdx + 1}/${state.activeSet.length} • Page ${state.pageNum}/${state.pdf.numPages}`;
+        document.getElementById('perf-page-count').innerText = `Élém. ${state.currentIdx + 1}/${state.activeSet.length} • Page ${state.pageNum}/${state.pdf.numPages}`;
     }
 
     function nextPage(e) {
         if(e) e.stopPropagation();
-        if(state.pdf && state.pageNum < state.pdf.numPages) { 
-            state.pageNum++; renderPage(); 
-        } else if(state.currentIdx < state.activeSet.length - 1) { 
-            state.currentIdx++; loadItem(); 
-        }
+        if(state.pdf && state.pageNum < state.pdf.numPages) { state.pageNum++; renderPage(); } 
+        else if(state.currentIdx < state.activeSet.length - 1) { state.currentIdx++; loadItem(); }
     }
 
     function prevPage(e) {
         if(e) e.stopPropagation();
-        if(state.pdf && state.pageNum > 1) { 
-            state.pageNum--; renderPage(); 
-        } else if(state.currentIdx > 0) { 
-            state.currentIdx--; loadItem(); 
-        }
+        if(state.pdf && state.pageNum > 1) { state.pageNum--; renderPage(); } 
+        else if(state.currentIdx > 0) { state.currentIdx--; loadItem(); }
     }
 
-    function handleCenterTap(e) { 
-        document.getElementById('performance-mode').classList.toggle('show-ui'); 
-    }
-
+    function handleCenterTap(e) { document.getElementById('performance-mode').classList.toggle('show-ui'); }
     function exitPerformance() { 
         if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
-        document.getElementById('performance-mode').style.display = 'none'; 
-        state.pdf = null; 
+        document.getElementById('performance-mode').style.display = 'none'; state.pdf = null; 
     }
 
     // --- GESTION MESSES (ÉDITEUR) ---
     function newMesse() { 
         const n = prompt("Nom de la Messe (ex: Dimanche 12 Mai) :"); 
-        if(n) { 
-            state.messes.push({name: n, songs: []}); 
-            saveMesses(); 
-            showView('planner'); 
-        }
+        if(n) { state.messes.push({name: n, songs: []}); saveMesses(); showView('planner'); }
     }
 
     function editMesse(idx) {
@@ -399,18 +419,14 @@
             <div class="editor-grid">
                 <div class="col">
                     <input type="text" class="search-bar" style="margin:0" placeholder="Chercher un PDF à ajouter..." oninput="filterEditor(this.value)">
-                    <div id="editor-lib" class="list-box">
-                        ${renderEditorList(state.songs)}
-                    </div>
+                    <div id="editor-lib" class="list-box">${renderEditorList(state.songs)}</div>
                 </div>
                 
                 <div class="col">
                     <div class="note-form">
-                        <input type="text" id="note-title" class="input-field" placeholder="Titre de la note (ex: PREMIÈRE LECTURE)">
+                        <input type="text" id="note-title" class="input-field" placeholder="Titre (ex: PREMIÈRE LECTURE)">
                         <textarea id="note-content" class="input-field" placeholder="Contenu (texte, accords...)"></textarea>
-                        <button class="btn btn-primary" style="width:100%" onclick="addNote()">
-                            <i class="fas fa-plus"></i> Ajouter cette note
-                        </button>
+                        <button class="btn btn-primary" style="width:100%" onclick="addNote()"><i class="fas fa-plus"></i> Ajouter cette note</button>
                     </div>
                     
                     <div id="messe-sortable" class="list-box" style="margin-top:0">
@@ -421,92 +437,115 @@
                                 <button class="btn" style="padding: 8px; background:transparent; color:#ff1744;" onclick="removeSongFromMesse(${i})">
                                     <i class="fas fa-times"></i>
                                 </button>
-                            </div>
-                        `).join('')}
+                            </div>`).join('')}
                     </div>
                 </div>
             </div>`;
         
-        // Initialisation du Drag & Drop
         new Sortable(document.getElementById('messe-sortable'), {
-            animation: 150,
-            handle: '.fa-file-pdf, .fa-align-left', // Restreint la zone de drag à l'icône pour éviter les conflits
+            animation: 150, handle: '.fa-file-pdf, .fa-align-left',
             onEnd: (e) => {
                 const songs = state.messes[state.currentMesseIdx].songs;
-                const itemToMove = songs.splice(e.oldIndex, 1)[0];
-                songs.splice(e.newIndex, 0, itemToMove);
-                saveMesses();
-                editMesse(state.currentMesseIdx); // Re-render pour MAJ visuelle correcte
+                songs.splice(e.newIndex, 0, songs.splice(e.oldIndex, 1)[0]);
+                saveMesses(); editMesse(state.currentMesseIdx);
             }
         });
     }
 
-    function renderEditorList(list) {
-        return list.map(s => `
-            <div class="item" onclick="addSongToMesse('${s.id}')">
-                <i class="fas fa-plus" style="color:#2979ff"></i> ${s.name}
-            </div>`).join('');
-    }
-
-    function filterEditor(query) {
-        const q = normalizeSearch(query);
-        const filtered = state.songs.filter(s => normalizeSearch(s.name).includes(q));
-        document.getElementById('editor-lib').innerHTML = renderEditorList(filtered);
-    }
-
+    function renderEditorList(list) { return list.map(s => `<div class="item" onclick="addSongToMesse('${s.id}')"><i class="fas fa-plus" style="color:#2979ff"></i> ${s.name}</div>`).join(''); }
+    function filterEditor(query) { document.getElementById('editor-lib').innerHTML = renderEditorList(state.songs.filter(s => normalizeSearch(s.name).includes(normalizeSearch(query)))); }
+    
     function addSongToMesse(id) {
-        const s = state.songs.find(x => x.id === id);
-        state.messes[state.currentMesseIdx].songs.push({...s});
-        saveMesses(); 
-        editMesse(state.currentMesseIdx);
+        state.messes[state.currentMesseIdx].songs.push({...state.songs.find(x => x.id === id)});
+        saveMesses(); editMesse(state.currentMesseIdx);
     }
 
     function addNote() {
-        const titleInput = document.getElementById('note-title');
-        const contentInput = document.getElementById('note-content');
-        
-        const title = titleInput.value.trim();
-        const content = contentInput.value.trim();
-        
+        const title = document.getElementById('note-title').value.trim();
+        const content = document.getElementById('note-content').value.trim();
         if (title) {
-            state.messes[state.currentMesseIdx].songs.push({ 
-                type: 'note', 
-                name: title.toUpperCase(), 
-                content: content 
-            });
-            saveMesses(); 
-            editMesse(state.currentMesseIdx);
-        } else {
-            alert("Veuillez donner au moins un titre à votre note (ex: Accueil, Psaume...).");
-        }
+            state.messes[state.currentMesseIdx].songs.push({ type: 'note', name: title.toUpperCase(), content: content });
+            saveMesses(); editMesse(state.currentMesseIdx);
+        } else alert("Veuillez donner au moins un titre à votre note.");
     }
 
-    function removeSongFromMesse(indexInMesse) {
-        state.messes[state.currentMesseIdx].songs.splice(indexInMesse, 1);
-        saveMesses(); 
-        editMesse(state.currentMesseIdx);
+    function removeSongFromMesse(i) { state.messes[state.currentMesseIdx].songs.splice(i, 1); saveMesses(); editMesse(state.currentMesseIdx); }
+    function saveMesses() { localStorage.setItem('cantus_messes', JSON.stringify(state.messes)); }
+    function deleteMesse(i) { if(confirm("Supprimer cette messe ?")) { state.messes.splice(i,1); saveMesses(); showView('planner'); } }
+
+    // --- SYSTÈME D'IMPORT / EXPORT ---
+    function openExportModal(idx) {
+        const messe = state.messes[idx];
+        const jsonString = JSON.stringify(messe);
+        const compressed = LZString.compressToEncodedURIComponent(jsonString);
+        
+        // On construit l'URL exacte actuelle en rajoutant le paramètre ?import=...
+        const baseUrl = window.location.href.split('?')[0]; 
+        const url = `${baseUrl}?import=${compressed}`;
+
+        state.exportUrlCache = url;
+        state.exportJsonCache = jsonString;
+        
+        document.getElementById('export-title').innerText = `Export : ${messe.name}`;
+        document.getElementById('export-modal').style.display = 'flex';
+
+        // Générer le QR Code (si l'URL est trop massive, il sera très dense, d'où l'intérêt du fichier json en backup)
+        new QRious({
+            element: document.getElementById('qr-code-img'),
+            value: url,
+            size: 250,
+            level: 'L' // Low error correction to save space
+        });
     }
 
-    function saveMesses() { 
-        localStorage.setItem('cantus_messes', JSON.stringify(state.messes)); 
-    }
-    
-    function deleteMesse(i) { 
-        if(confirm("Êtes-vous sûr de vouloir supprimer cette messe entière ?")) { 
-            state.messes.splice(i,1); 
-            saveMesses(); 
-            showView('planner'); 
-        } 
+    function closeModal() {
+        document.getElementById('export-modal').style.display = 'none';
     }
 
-    // Gestion du redimensionnement de la fenêtre pour le PDF
-    window.addEventListener('resize', () => { 
-        if(state.pdf && document.getElementById('performance-mode').style.display === 'flex') {
-            renderPage(); 
-        }
-    });
+    function copyExportLink() {
+        navigator.clipboard.writeText(state.exportUrlCache).then(() => {
+            alert("Lien copié ! Vous pouvez le coller dans un message, mail, etc.");
+        }).catch(err => {
+            alert("Erreur lors de la copie du lien.");
+        });
+    }
 
-    // Lancement au démarrage
+    function downloadExportFile() {
+        const messeName = document.getElementById('export-title').innerText.replace('Export : ', '');
+        const blob = new Blob([state.exportJsonCache], { type: "application/json" });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Cantus_${messeName.replace(/ /g, '_')}.json`;
+        a.click();
+    }
+
+    function handleFileImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedMesse = JSON.parse(e.target.result);
+                if (importedMesse.name && importedMesse.songs) {
+                    state.messes.push(importedMesse);
+                    saveMesses();
+                    showView('planner');
+                    alert(`La messe "${importedMesse.name}" a été importée via le fichier !`);
+                } else {
+                    alert("Ce fichier JSON ne semble pas être une messe Cantus valide.");
+                }
+            } catch (err) {
+                alert("Erreur de lecture du fichier. Assurez-vous qu'il s'agit bien d'un fichier .json Cantus.");
+            }
+            // Réinitialiser l'input
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    window.addEventListener('resize', () => { if(state.pdf && document.getElementById('performance-mode').style.display === 'flex') renderPage(); });
+
     init();
 </script>
 </body>
