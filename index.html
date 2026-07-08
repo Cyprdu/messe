@@ -1,158 +1,367 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cantus Pro - Lecteur de Partitions</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Cantus Pro - Lecteur de Partitions</title>
 
-    <style>
-        :root {
-            --bg-color: #000000;
-            --surface-color: #1a1a1a;
-            --primary-color: #2979ff;
-            --accent-color: #ff1744;
-            --text-color: #f5f5f5;
-            --border-color: #333;
-        }
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        
-        body, html {
-            margin: 0; padding: 0;
-            background: var(--bg-color);
-            color: var(--text-color);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            height: 100%; overflow: hidden;
-        }
+<style>
+    :root {
+        --bg-color: #000000;
+        --surface-color: #1a1a1a;
+        --surface-elevated: #222222;
+        --primary-color: #2979ff;
+        --primary-glow: rgba(41, 121, 255, 0.35);
+        --accent-color: #ff1744;
+        --success-color: #00e676;
+        --text-color: #f5f5f5;
+        --text-dim: #999;
+        --border-color: #2f2f2f;
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --radius-sm: 10px;
+        --tap-min: 56px;
+    }
 
-        #app { display: flex; flex-direction: column; height: 100vh; background: #121212; }
-        
-        header {
-            background: var(--surface-color);
-            padding: 0.8rem 1rem;
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--border-color);
-        }
+    * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
+        touch-action: manipulation;
+    }
 
-        nav {
-            display: flex; gap: 10px; padding: 10px;
-            background: var(--surface-color);
-        }
+    html, body {
+        margin: 0; padding: 0;
+        background: var(--bg-color);
+        color: var(--text-color);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+    }
 
-        .btn {
-            background: #333; color: white; border: none;
-            padding: 12px 20px; border-radius: 8px;
-            cursor: pointer; font-size: 1rem; display: flex; align-items: center; gap: 8px;
-            justify-content: center;
-        }
-        .btn:active { opacity: 0.8; }
-        .btn-primary { background: var(--primary-color); }
-        .btn-accent { background: var(--accent-color); }
+    #app {
+        display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+        background: #0a0a0a;
+        padding-top: var(--safe-top);
+        padding-left: var(--safe-left);
+        padding-right: var(--safe-right);
+    }
 
-        main { flex: 1; overflow-y: auto; padding: 15px; }
+    header {
+        background: linear-gradient(180deg, #1e1e1e, #171717);
+        padding: 14px 22px;
+        display: flex; justify-content: space-between; align-items: center;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+    }
+    header h2 {
+        margin: 0; font-size: 1.4rem; letter-spacing: 1px;
+        display: flex; align-items: center; gap: 10px;
+    }
+    header h2 i { color: var(--primary-color); }
 
-        .search-bar, .input-field {
-            width: 100%; padding: 12px; border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: #252525; color: white; margin-bottom: 10px;
-            font-size: 1rem;
-        }
+    #sync-status {
+        font-size: 0.75rem; color: var(--text-dim);
+        padding: 6px 14px; border-radius: 20px; background: #262626;
+        display: flex; align-items: center; gap: 6px;
+        transition: all 0.3s ease;
+    }
+    #sync-status.online::before { content:''; width:8px; height:8px; border-radius:50%; background: var(--success-color); box-shadow: 0 0 8px var(--success-color); }
+    #sync-status.offline::before { content:''; width:8px; height:8px; border-radius:50%; background: var(--accent-color); }
 
-        textarea.input-field { height: 80px; resize: none; font-family: inherit; }
+    nav {
+        display: flex; gap: 12px; padding: 14px 18px;
+        background: var(--surface-color);
+        flex-shrink: 0;
+        border-bottom: 1px solid var(--border-color);
+    }
 
-        .song-card {
-            background: var(--surface-color);
-            padding: 15px; margin-bottom: 8px;
-            border-radius: 10px; display: flex;
-            justify-content: space-between; align-items: center;
-        }
+    .btn {
+        background: #2b2b2b; color: white; border: none;
+        padding: 16px 24px; border-radius: var(--radius-md);
+        cursor: pointer; font-size: 1.05rem; font-weight: 500;
+        display: flex; align-items: center; gap: 10px;
+        justify-content: center;
+        min-height: var(--tap-min);
+        transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease;
+        will-change: transform;
+        -webkit-user-select: none;
+    }
+    .btn:active { transform: scale(0.94); background: #3a3a3a; }
+    .btn-primary { background: var(--primary-color); box-shadow: 0 4px 14px var(--primary-glow); }
+    .btn-primary:active { background: #1c5fd6; }
+    .btn-accent { background: var(--accent-color); box-shadow: 0 4px 14px rgba(255,23,68,0.35); }
+    .btn-accent:active { background: #c40f37; }
+    .btn-icon-only { padding: 16px; min-width: var(--tap-min); }
+    nav .btn { flex: 1; }
 
-        /* --- MODE PERFORMANCE PLEIN ÉCRAN --- */
-        #performance-mode {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: #000; z-index: 9999; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
-        }
+    main {
+        flex: 1; overflow-y: auto; padding: 18px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding-bottom: calc(18px + var(--safe-bottom));
+    }
 
-        #pdf-viewport {
-            position: relative; width: 100vw; height: 100vh;
-            display: flex; justify-content: center; align-items: center;
-            overflow: hidden;
-        }
+    .search-bar, .input-field {
+        width: 100%; padding: 16px 18px; border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        background: #202020; color: white; margin-bottom: 12px;
+        font-size: 1.05rem;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .search-bar:focus, .input-field:focus {
+        outline: none; border-color: var(--primary-color); background: #242424;
+    }
 
-        canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        
-        #text-display {
-            display: none; color: white; text-align: center;
-            padding: 40px; max-width: 90vw; overflow-y: auto; max-height: 80vh;
-        }
-        
-        #note-title-display { 
-            font-size: 2rem; color: var(--primary-color); 
-            margin-bottom: 30px; font-weight: bold; text-transform: uppercase;
-        }
-        #note-content-display { 
-            font-size: 2.2rem; white-space: pre-wrap; 
-            line-height: 1.4; word-break: break-word;
-        }
+    textarea.input-field { height: 90px; resize: none; font-family: inherit; }
 
-        .tap-zone { position: absolute; top: 0; height: 100%; width: 20%; z-index: 100; cursor: pointer; }
-        .tap-left { left: 0; }
-        .tap-right { right: 0; }
+    .song-card {
+        background: var(--surface-color);
+        padding: 18px 20px; margin-bottom: 10px;
+        border-radius: var(--radius-md);
+        display: flex; justify-content: space-between; align-items: center;
+        border: 1px solid transparent;
+        transition: transform 0.15s ease, border-color 0.2s ease;
+        animation: fadeSlideIn 0.3s ease backwards;
+    }
+    .song-card:active { transform: scale(0.98); border-color: var(--primary-color); }
+    .song-card span { font-weight: 600; font-size: 1.05rem; flex: 1; padding-right: 12px; line-height: 1.3; }
 
-        #perf-toolbar {
-            position: absolute; top: 0; width: 100%;
-            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
-            padding: 10px 20px; display: flex; justify-content: space-between;
-            align-items: center; z-index: 200;
-            transform: translateY(-100%); transition: transform 0.2s ease-in-out;
-        }
-        #performance-mode.show-ui #perf-toolbar { transform: translateY(0); }
+    @keyframes fadeSlideIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
 
-        /* --- ÉDITEUR DE MESSE --- */
-        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; height: calc(100vh - 220px); }
-        .col { background: var(--surface-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; }
-        .list-box { flex: 1; overflow-y: auto; border: 1px solid #333; border-radius: 8px; margin-top: 10px; }
-        .item { padding: 12px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .item:hover { background: #2a2a2a; }
-        .item-note { border-left: 4px solid var(--primary-color); background: #222; }
-        .note-form { background: #252525; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+    .empty-state {
+        text-align: center; color: var(--text-dim); padding: 60px 20px;
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
+    }
+    .empty-state i { font-size: 3rem; opacity: 0.3; }
 
-        /* --- MODAL EXPORT --- */
-        #export-modal {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.85); z-index: 5000; display: none;
-            justify-content: center; align-items: center; backdrop-filter: blur(5px);
-        }
-        .modal-content {
-            background: var(--surface-color); padding: 25px; border-radius: 12px;
-            max-width: 90vw; width: 400px; text-align: center; border: 1px solid var(--border-color);
-        }
-        #qr-code-img { margin: 20px auto; display: block; border: 10px solid white; border-radius: 8px; }
+    /* --- MODE PERFORMANCE PLEIN ÉCRAN --- */
+    #performance-mode {
+        position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
+        background: #000; z-index: 9999; display: none;
+        flex-direction: column; justify-content: center; align-items: center;
+        touch-action: none;
+    }
 
-        @media (max-width: 768px) {
-            .editor-grid { grid-template-columns: 1fr; height: auto; }
-            .col { height: 400px; margin-bottom: 15px; }
-        }
-    </style>
+    #pdf-viewport {
+        position: relative; width: 100%; height: 100%;
+        display: flex; justify-content: center; align-items: center;
+        overflow: hidden;
+        touch-action: none;
+    }
+
+    #pdf-canvas-wrap {
+        position: relative;
+        transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+        will-change: transform;
+    }
+    #pdf-canvas-wrap.slide-next { transform: translateX(-40px); opacity: 0; }
+    #pdf-canvas-wrap.slide-prev { transform: translateX(40px); opacity: 0; }
+
+    canvas {
+        display: block;
+        box-shadow: 0 0 40px rgba(0,0,0,0.6);
+        border-radius: 4px;
+        max-width: 100vw; max-height: 100vh;
+    }
+
+    #text-display {
+        display: none; color: white; text-align: center;
+        padding: 50px; max-width: 92vw; overflow-y: auto; max-height: 85vh;
+        -webkit-overflow-scrolling: touch;
+        animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    #note-title-display {
+        font-size: 2.4rem; color: var(--primary-color);
+        margin-bottom: 34px; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    #note-content-display {
+        font-size: 2.3rem; white-space: pre-wrap;
+        line-height: 1.5; word-break: break-word;
+        font-weight: 400;
+    }
+
+    .tap-zone {
+        position: absolute; top: 0; height: 100%; width: 25%; z-index: 100;
+        cursor: pointer;
+        display: flex; align-items: center;
+        opacity: 0; transition: opacity 0.2s ease;
+    }
+    .tap-left { left: 0; justify-content: flex-start; padding-left: 20px; }
+    .tap-right { right: 0; justify-content: flex-end; padding-right: 20px; }
+    .tap-zone i {
+        font-size: 2rem; color: rgba(255,255,255,0.5);
+        background: rgba(0,0,0,0.3); width: 56px; height: 56px;
+        border-radius: 50%; display:flex; align-items:center; justify-content:center;
+        backdrop-filter: blur(6px);
+    }
+    #performance-mode.show-ui .tap-zone { opacity: 1; }
+
+    .center-tap-zone {
+        position: absolute; left: 25%; top: 0; width: 50%; height: 100%; z-index: 99;
+    }
+
+    #perf-toolbar {
+        position: absolute; top: 0; width: 100%;
+        background: rgba(15,15,15,0.9); backdrop-filter: blur(16px);
+        padding: calc(14px + var(--safe-top)) 22px 14px; display: flex; justify-content: space-between;
+        align-items: center; z-index: 200;
+        transform: translateY(-100%); transition: transform 0.28s cubic-bezier(0.22,1,0.36,1);
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    #performance-mode.show-ui #perf-toolbar { transform: translateY(0); }
+
+    #perf-bottombar {
+        position: absolute; bottom: 0; width: 100%;
+        background: rgba(15,15,15,0.9); backdrop-filter: blur(16px);
+        padding: 14px 22px calc(14px + var(--safe-bottom)); z-index: 200;
+        transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.22,1,0.36,1);
+        border-top: 1px solid rgba(255,255,255,0.08);
+        display: flex; align-items: center; gap: 16px;
+    }
+    #performance-mode.show-ui #perf-bottombar { transform: translateY(0); }
+
+    #perf-progress-track {
+        flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden; position: relative;
+    }
+    #perf-progress-fill {
+        height: 100%; background: var(--primary-color); border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+
+    .perf-nav-btn {
+        width: 50px; height: 50px; border-radius: 50%; background: #2b2b2b; color: white;
+        border: none; display: flex; align-items: center; justify-content: center;
+        font-size: 1.1rem; flex-shrink: 0;
+        transition: transform 0.12s ease, background 0.2s ease;
+    }
+    .perf-nav-btn:active { transform: scale(0.88); background: var(--primary-color); }
+
+    /* --- ÉDITEUR DE MESSE --- */
+    .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; height: calc(100vh - 260px); height: calc(100dvh - 260px); }
+    .col { background: var(--surface-color); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; min-height: 0; }
+    .col-title { font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 600; }
+    .list-box { flex: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    .item {
+        padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 14px;
+        cursor: pointer; min-height: var(--tap-min); transition: background 0.15s ease;
+    }
+    .item:active { background: #2a2a2a; }
+    .item-note { border-left: 4px solid var(--primary-color); background: #201f2e; }
+    .item span { flex: 1; font-weight: 500; line-height: 1.3; }
+    .drag-handle { color: #888; font-size: 1.2rem; padding: 6px; cursor: grab; }
+    .sortable-ghost { opacity: 0.3; background: var(--primary-color) !important; }
+    .sortable-chosen { background: #2a2a2a; }
+
+    .note-form { background: var(--surface-elevated); padding: 14px; border-radius: var(--radius-md); margin-bottom: 12px; }
+
+    .remove-btn {
+        width: 40px; height: 40px; border-radius: 50%; background: transparent; color: var(--accent-color);
+        border: none; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+        transition: background 0.15s ease;
+    }
+    .remove-btn:active { background: rgba(255,23,68,0.2); }
+
+    /* --- MODAL EXPORT --- */
+    #export-modal {
+        position: fixed; inset: 0; width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.85); z-index: 5000; display: none;
+        justify-content: center; align-items: center; backdrop-filter: blur(8px);
+        animation: fadeIn 0.2s ease;
+    }
+    .modal-content {
+        background: var(--surface-color); padding: 30px; border-radius: var(--radius-lg);
+        max-width: 90vw; width: 420px; text-align: center; border: 1px solid var(--border-color);
+        animation: modalPop 0.25s cubic-bezier(0.22,1,0.36,1);
+        max-height: 90vh; overflow-y: auto;
+    }
+    @keyframes modalPop { from { opacity:0; transform: scale(0.9); } to { opacity:1; transform: scale(1); } }
+    #qr-code-img { margin: 20px auto; display: block; border: 10px solid white; border-radius: 10px; max-width: 100%; height: auto; }
+
+    /* Toast notifications */
+    #toast {
+        position: fixed; bottom: calc(30px + var(--safe-bottom)); left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: #2b2b2b; color: white; padding: 16px 26px; border-radius: 50px;
+        font-size: 1rem; z-index: 10000; opacity: 0;
+        transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.35s ease;
+        display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        max-width: 90vw; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.success i { color: var(--success-color); }
+    #toast.error i { color: var(--accent-color); }
+
+    #loading-spinner {
+        position: fixed; inset:0; display:none; align-items:center; justify-content:center;
+        background: rgba(0,0,0,0.5); z-index: 8000; backdrop-filter: blur(4px);
+    }
+    .spinner {
+        width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.2);
+        border-top-color: var(--primary-color); border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Scrollbar styling for tablet */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+    /* --- Tablet / Landscape specific --- */
+    @media (min-width: 900px) {
+        main { padding: 24px 40px; }
+        .song-card { padding: 20px 26px; }
+        header { padding: 18px 32px; }
+        nav { padding: 16px 32px; }
+    }
+
+    @media (max-width: 860px) {
+        .editor-grid { grid-template-columns: 1fr; height: auto; }
+        .col { height: 45vh; margin-bottom: 16px; }
+    }
+
+    @media (orientation: portrait) and (max-width: 700px) {
+        nav .btn span.nav-label { display: none; }
+    }
+
+    /* Prevent text selection issues on drag */
+    .list-box, .item { -webkit-user-drag: none; }
+</style>
 </head>
 <body>
 
 <div id="app">
     <header>
-        <h2 style="margin:0">CANTUS</h2>
-        <div id="sync-status" style="font-size: 0.7rem; color: #666;">Prêt</div>
+        <h2><i class="fas fa-music"></i> CANTUS</h2>
+        <div id="sync-status">Chargement...</div>
     </header>
     <nav>
-        <button class="btn" onclick="showView('library')"><i class="fas fa-music"></i> Bibliothèque</button>
-        <button class="btn" onclick="showView('planner')"><i class="fas fa-calendar-alt"></i> Messes</button>
+        <button class="btn" id="nav-library" onclick="showView('library')"><i class="fas fa-book-open"></i> <span class="nav-label">Bibliothèque</span></button>
+        <button class="btn" id="nav-planner" onclick="showView('planner')"><i class="fas fa-calendar-alt"></i> <span class="nav-label">Messes</span></button>
     </nav>
     <main id="content"></main>
 </div>
@@ -162,42 +371,52 @@
 <div id="export-modal">
     <div class="modal-content">
         <h3 id="export-title" style="margin-top:0">Exporter la messe</h3>
-        <p style="font-size:0.9rem; color:#aaa;">Scannez ce QR Code avec la tablette, ou copiez le lien.</p>
-        
+        <p style="font-size:0.95rem; color:#aaa;">Scannez ce QR Code avec la tablette, ou copiez le lien.</p>
         <canvas id="qr-code-img"></canvas>
-        
-        <div style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
+        <div style="display:flex; flex-direction:column; gap:12px; margin-top:22px;">
             <button class="btn btn-primary" onclick="copyExportLink()"><i class="fas fa-link"></i> Copier le lien</button>
             <button class="btn" onclick="downloadExportFile()"><i class="fas fa-download"></i> Télécharger Fichier (.json)</button>
-            <button class="btn" style="background:#444;" onclick="closeModal()"><i class="fas fa-times"></i> Fermer</button>
+            <button class="btn" style="background:#3a3a3a;" onclick="closeModal()"><i class="fas fa-times"></i> Fermer</button>
         </div>
     </div>
 </div>
 
+<div id="loading-spinner"><div class="spinner"></div></div>
+<div id="toast"><i class="fas fa-check-circle"></i><span id="toast-text"></span></div>
+
 <div id="performance-mode">
     <div id="perf-toolbar">
-        <button class="btn btn-primary" onclick="exitPerformance()"><i class="fas fa-arrow-left"></i> Quitter</button>
-        <div style="text-align: center">
-            <div id="perf-song-name" style="font-weight:bold; font-size:1.1rem">CHANT</div>
-            <div id="perf-page-count" style="font-size:0.8rem; color:#aaa">1 / 1</div>
+        <button class="btn btn-primary btn-icon-only" onclick="exitPerformance()"><i class="fas fa-chevron-left"></i></button>
+        <div style="text-align: center; flex:1; padding: 0 12px; overflow:hidden;">
+            <div id="perf-song-name" style="font-weight:700; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">CHANT</div>
         </div>
         <div style="width:50px"></div>
     </div>
-    
-    <div id="pdf-viewport" onclick="handleCenterTap(event)">
-        <div class="tap-zone tap-left" onclick="prevPage(event)"></div>
-        <div class="tap-zone tap-right" onclick="nextPage(event)"></div>
-        <canvas id="pdf-canvas"></canvas>
+
+    <div id="pdf-viewport">
+        <div class="tap-zone tap-left" onclick="prevPage(event)"><i class="fas fa-chevron-left"></i></div>
+        <div class="center-tap-zone" onclick="handleCenterTap(event)"></div>
+        <div class="tap-zone tap-right" onclick="nextPage(event)"><i class="fas fa-chevron-right"></i></div>
+        <div id="pdf-canvas-wrap">
+            <canvas id="pdf-canvas"></canvas>
+        </div>
         <div id="text-display">
             <div id="note-title-display"></div>
             <div id="note-content-display"></div>
         </div>
     </div>
+
+    <div id="perf-bottombar">
+        <button class="perf-nav-btn" onclick="prevPage(event)"><i class="fas fa-step-backward"></i></button>
+        <div id="perf-progress-track"><div id="perf-progress-fill" style="width:0%"></div></div>
+        <div id="perf-page-count" style="font-size:0.85rem; color:#ccc; min-width:110px; text-align:center;">1 / 1</div>
+        <button class="perf-nav-btn" onclick="nextPage(event)"><i class="fas fa-step-forward"></i></button>
+    </div>
 </div>
 
 <script>
-    // --- CONFIG (À REMPLACER) ---
-    const GITHUB_USER = 'Cyprdu'; 
+    // --- CONFIG ---
+    const GITHUB_USER = 'Cyprdu';
     const GITHUB_REPO = 'messe';
     const GITHUB_PATH = 'partitions';
 
@@ -212,35 +431,52 @@
         currentIdx: 0,
         pdf: null,
         pageNum: 1,
+        renderTask: null,
         exportUrlCache: '',
-        exportJsonCache: ''
+        exportJsonCache: '',
+        currentView: 'library'
     };
 
+    let toastTimeout = null;
+    function showToast(msg, type = 'success') {
+        const t = document.getElementById('toast');
+        const icon = t.querySelector('i');
+        t.className = type;
+        icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+        document.getElementById('toast-text').innerText = msg;
+        t.classList.add('show');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => t.classList.remove('show'), 2600);
+    }
+
+    function vibrate(ms = 15) {
+        if (navigator.vibrate) navigator.vibrate(ms);
+    }
+
+    function showLoading(v) {
+        document.getElementById('loading-spinner').style.display = v ? 'flex' : 'none';
+    }
+
     async function init() {
-        // 1. Vérifier si on arrive depuis un lien d'importation (Scanner un QR Code)
         const urlParams = new URLSearchParams(window.location.search);
         const importData = urlParams.get('import');
-        
+
         if (importData) {
             try {
                 const jsonString = LZString.decompressFromEncodedURIComponent(importData);
                 const importedMesse = JSON.parse(jsonString);
                 state.messes.push(importedMesse);
                 saveMesses();
-                
-                // Nettoyer l'URL pour éviter de réimporter à chaque rafraîchissement
                 window.history.replaceState({}, document.title, window.location.pathname);
-                alert(`Succès ! La messe "${importedMesse.name}" a été importée dans votre appareil.`);
+                showToast(`"${importedMesse.name}" importée !`, 'success');
             } catch (e) {
-                alert("Erreur lors de l'importation. Le lien est peut-être corrompu ou trop ancien.");
+                showToast("Erreur d'importation", 'error');
                 console.error(e);
             }
         }
 
-        // 2. Charger la bibliothèque normalement
         await loadLibrary();
-        
-        // 3. Si on vient d'importer, afficher directement l'onglet Messes
+
         if (importData) {
             showView('planner');
         } else {
@@ -249,6 +485,9 @@
     }
 
     async function loadLibrary() {
+        const statusEl = document.getElementById('sync-status');
+        statusEl.className = '';
+        statusEl.innerText = 'Synchronisation...';
         try {
             const r = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`);
             const d = await r.json();
@@ -258,49 +497,58 @@
                 name: f.name.replace('.pdf', '').replace(/_/g, ' ').toUpperCase(),
                 url: f.download_url
             }));
+            state.songs.sort((a,b) => a.name.localeCompare(b.name));
             localStorage.setItem('cantus_cache', JSON.stringify(state.songs));
-            document.getElementById('sync-status').innerText = "À jour";
+            statusEl.classList.add('online');
+            statusEl.innerText = "À jour";
         } catch(e) {
             let cached = JSON.parse(localStorage.getItem('cantus_cache')) || [];
             state.songs = cached.map(s => ({ ...s, name: s.name.toUpperCase(), type: 'song' }));
-            document.getElementById('sync-status').innerText = "Hors-ligne";
+            statusEl.classList.add('offline');
+            statusEl.innerText = "Hors-ligne";
         }
+        if (state.currentView === 'library') showView('library');
     }
 
     function showView(v) {
+        state.currentView = v;
+        document.getElementById('nav-library').classList.toggle('btn-primary', v === 'library');
+        document.getElementById('nav-planner').classList.toggle('btn-primary', v === 'planner');
+
         const c = document.getElementById('content');
         if(v === 'library') {
             c.innerHTML = `
-                <input type="text" class="search-bar" placeholder="Rechercher un chant..." oninput="searchLibrary(this.value)">
+                <input type="text" class="search-bar" placeholder="🔍 Rechercher un chant..." oninput="searchLibrary(this.value)" autocomplete="off">
                 <div id="lib-list">${renderList(state.songs)}</div>`;
         } else if(v === 'planner') {
             c.innerHTML = `
-                <div style="display:flex; gap:10px; margin-bottom:15px;">
-                    <button class="btn btn-primary" onclick="newMesse()" style="flex:1;">+ Nouvelle Messe</button>
-                    <button class="btn" onclick="document.getElementById('file-import').click()" title="Importer un fichier JSON"><i class="fas fa-file-import"></i></button>
+                <div style="display:flex; gap:12px; margin-bottom:16px;">
+                    <button class="btn btn-primary" onclick="newMesse()" style="flex:1;"><i class="fas fa-plus"></i> Nouvelle Messe</button>
+                    <button class="btn btn-icon-only" onclick="document.getElementById('file-import').click()" title="Importer un fichier JSON"><i class="fas fa-file-import"></i></button>
                 </div>
                 <div id="messes-list">${renderMesses()}</div>`;
         }
     }
 
     function renderList(list) {
-        return list.map(s => `
-            <div class="song-card">
-                <span style="font-weight: 500;">${s.name}</span>
-                <button class="btn btn-primary" onclick="playSingle('${s.id}')"><i class="fas fa-play"></i> Lire</button>
+        if (list.length === 0) return `<div class="empty-state"><i class="fas fa-folder-open"></i><span>Aucun chant trouvé</span></div>`;
+        return list.map((s,i) => `
+            <div class="song-card" style="animation-delay:${Math.min(i*0.02,0.4)}s">
+                <span>${s.name}</span>
+                <button class="btn btn-primary" onclick="playSingle('${s.id}')"><i class="fas fa-play"></i></button>
             </div>`).join('');
     }
 
     function renderMesses() {
-        if(state.messes.length === 0) return "<div style='text-align:center; color:#666; padding:20px;'>Aucune messe programmée.</div>";
-        
+        if(state.messes.length === 0) return `<div class="empty-state"><i class="fas fa-calendar-times"></i><span>Aucune messe programmée</span></div>`;
+
         return state.messes.map((m, i) => `
-            <div class="song-card">
-                <span><strong>${m.name}</strong> (${m.songs.length} éléments)</span>
+            <div class="song-card" style="animation-delay:${i*0.03}s">
+                <span><strong>${m.name}</strong><br><small style="color:var(--text-dim); font-weight:400;">${m.songs.length} élément(s)</small></span>
                 <div style="display:flex; gap:8px">
-                    <button class="btn" onclick="openExportModal(${i})" title="Partager / Exporter vers Tablette"><i class="fas fa-share-alt"></i></button>
-                    <button class="btn" onclick="editMesse(${i})" title="Modifier"><i class="fas fa-edit"></i></button>
-                    <button class="btn btn-accent" onclick="startPerformance(state.messes[${i}].songs)" title="Jouer"><i class="fas fa-play"></i></button>
+                    <button class="btn btn-icon-only" onclick="openExportModal(${i})" title="Partager"><i class="fas fa-share-alt"></i></button>
+                    <button class="btn btn-icon-only" onclick="editMesse(${i})" title="Modifier"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-accent btn-icon-only" onclick="startPerformance(state.messes[${i}].songs)" title="Jouer"><i class="fas fa-play"></i></button>
                 </div>
             </div>`).join('');
     }
@@ -330,37 +578,54 @@
         if (!setlist || setlist.length === 0) return;
         state.activeSet = setlist;
         state.currentIdx = 0;
-        
+        vibrate(20);
+
         const el = document.documentElement;
-        if (el.requestFullscreen) el.requestFullscreen();
-        
-        document.getElementById('performance-mode').style.display = 'flex';
-        document.getElementById('performance-mode').classList.add('show-ui');
-        setTimeout(() => { document.getElementById('performance-mode').classList.remove('show-ui'); }, 3000);
-        
+        if (el.requestFullscreen) { el.requestFullscreen().catch(()=>{}); }
+        else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); }
+
+        try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape').catch(()=>{}); } catch(e){}
+
+        const perfMode = document.getElementById('performance-mode');
+        perfMode.style.display = 'flex';
+        perfMode.classList.add('show-ui');
+        setTimeout(() => { perfMode.classList.remove('show-ui'); }, 2800);
+
         await loadItem();
     }
 
     async function loadItem() {
         const item = state.activeSet[state.currentIdx];
-        const canvas = document.getElementById('pdf-canvas');
         const textDisplay = document.getElementById('text-display');
-        
+        const canvas = document.getElementById('pdf-canvas');
+
         document.getElementById('perf-song-name').innerText = item.name.toUpperCase();
 
         if (item.type === 'note') {
+            state.pdf = null;
             canvas.style.display = 'none';
             textDisplay.style.display = 'block';
             document.getElementById('note-title-display').innerText = item.name;
-            document.getElementById('note-content-display').innerText = item.content || "";
-            document.getElementById('perf-page-count').innerText = `Élém. ${state.currentIdx + 1} / ${state.activeSet.length}`;
-            state.pdf = null;
-        } else {
-            canvas.style.display = 'block';
-            textDisplay.style.display = 'none';
-            state.pdf = await pdfjsLib.getDocument(item.url).promise;
+            document.getElementById('note-content-display').innerText = item.content || '(Aucun contenu)';
+            document.getElementById('perf-page-count').innerText = `Élém. ${state.currentIdx + 1}/${state.activeSet.length}`;
+            document.getElementById('perf-progress-fill').style.width = `${((state.currentIdx+1)/state.activeSet.length)*100}%`;
+            return;
+        }
+
+        textDisplay.style.display = 'none';
+        canvas.style.display = 'block';
+        showLoading(true);
+
+        try {
+            const loadingTask = pdfjsLib.getDocument(item.url);
+            state.pdf = await loadingTask.promise;
             state.pageNum = 1;
-            renderPage();
+            await renderPage();
+        } catch (e) {
+            showToast("Erreur de chargement du PDF", 'error');
+            console.error(e);
+        } finally {
+            showLoading(false);
         }
     }
 
@@ -369,95 +634,175 @@
         const page = await state.pdf.getPage(state.pageNum);
         const canvas = document.getElementById('pdf-canvas');
         const ctx = canvas.getContext('2d');
-        
-        const unscaledViewport = page.getViewport({ scale: 1 });
-        const scale = Math.min(window.innerWidth / unscaledViewport.width, window.innerHeight / unscaledViewport.height);
-        const viewport = page.getViewport({ scale: scale * window.devicePixelRatio });
 
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        canvas.style.width = (viewport.width / window.devicePixelRatio) + "px";
-        canvas.style.height = (viewport.height / window.devicePixelRatio) + "px";
-        
-        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-        document.getElementById('perf-page-count').innerText = `Élém. ${state.currentIdx + 1}/${state.activeSet.length} • Page ${state.pageNum}/${state.pdf.numPages}`;
+        const viewportEl = document.getElementById('pdf-viewport');
+        const availW = viewportEl.clientWidth * 0.96;
+        const availH = viewportEl.clientHeight * 0.94;
+
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(availW / baseViewport.width, availH / baseViewport.height) * (window.devicePixelRatio || 1);
+        const viewport = page.getViewport({ scale });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = (viewport.width / (window.devicePixelRatio || 1)) + "px";
+        canvas.style.height = (viewport.height / (window.devicePixelRatio || 1)) + "px";
+
+        if (state.renderTask) { try { state.renderTask.cancel(); } catch(e){} }
+        state.renderTask = page.render({ canvasContext: ctx, viewport: viewport });
+        await state.renderTask.promise;
+
+        document.getElementById('perf-page-count').innerText = `Élém ${state.currentIdx + 1}/${state.activeSet.length} • P.${state.pageNum}/${state.pdf.numPages}`;
+        document.getElementById('perf-progress-fill').style.width = `${((state.currentIdx + (state.pageNum/state.pdf.numPages))/state.activeSet.length)*100}%`;
+    }
+
+    function animateTransition(direction) {
+        const wrap = document.getElementById('pdf-canvas-wrap');
+        wrap.classList.add(direction === 'next' ? 'slide-next' : 'slide-prev');
+        setTimeout(() => { wrap.classList.remove('slide-next','slide-prev'); }, 200);
     }
 
     function nextPage(e) {
         if(e) e.stopPropagation();
-        if(state.pdf && state.pageNum < state.pdf.numPages) { state.pageNum++; renderPage(); } 
-        else if(state.currentIdx < state.activeSet.length - 1) { state.currentIdx++; loadItem(); }
+        vibrate(10);
+        if(state.pdf && state.pageNum < state.pdf.numPages) {
+            state.pageNum++;
+            animateTransition('next');
+            renderPage();
+        } else if(state.currentIdx < state.activeSet.length - 1) {
+            state.currentIdx++;
+            loadItem();
+        } else {
+            showToast("Dernier élément atteint");
+        }
     }
 
     function prevPage(e) {
         if(e) e.stopPropagation();
-        if(state.pdf && state.pageNum > 1) { state.pageNum--; renderPage(); } 
-        else if(state.currentIdx > 0) { state.currentIdx--; loadItem(); }
+        vibrate(10);
+        if(state.pdf && state.pageNum > 1) {
+            state.pageNum--;
+            animateTransition('prev');
+            renderPage();
+        } else if(state.currentIdx > 0) {
+            state.currentIdx--;
+            loadItem();
+        }
     }
 
-    function handleCenterTap(e) { document.getElementById('performance-mode').classList.toggle('show-ui'); }
-    function exitPerformance() { 
-        if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
-        document.getElementById('performance-mode').style.display = 'none'; state.pdf = null; 
+    function handleCenterTap(e) {
+        if (e) e.stopPropagation();
+        document.getElementById('performance-mode').classList.toggle('show-ui');
+        vibrate(8);
     }
+
+    function exitPerformance() {
+        vibrate(15);
+        if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+        try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e){}
+        document.getElementById('performance-mode').style.display = 'none';
+        state.pdf = null;
+    }
+
+    // --- SWIPE GESTURES ---
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+    const viewportEl = document.getElementById('pdf-viewport');
+    viewportEl.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+    }, { passive: true });
+
+    viewportEl.addEventListener('touchend', (e) => {
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        const dt = Date.now() - touchStartTime;
+        if (Math.abs(dx) > 60 && Math.abs(dy) < 80 && dt < 500) {
+            if (dx < 0) nextPage(); else prevPage();
+        }
+    }, { passive: true });
+
+    // Keyboard support (for testing on desktop/external keyboard)
+    document.addEventListener('keydown', (e) => {
+        if (document.getElementById('performance-mode').style.display === 'flex') {
+            if (e.key === 'ArrowRight' || e.key === ' ') nextPage();
+            else if (e.key === 'ArrowLeft') prevPage();
+            else if (e.key === 'Escape') exitPerformance();
+        }
+    });
 
     // --- GESTION MESSES (ÉDITEUR) ---
-    function newMesse() { 
-        const n = prompt("Nom de la Messe (ex: Dimanche 12 Mai) :"); 
-        if(n) { state.messes.push({name: n, songs: []}); saveMesses(); showView('planner'); }
+    function newMesse() {
+        const n = prompt("Nom de la Messe (ex: Dimanche 12 Mai) :");
+        if(n) { state.messes.push({name: n, songs: []}); saveMesses(); showView('planner'); showToast("Messe créée"); }
     }
 
     function editMesse(idx) {
         state.currentMesseIdx = idx;
         const m = state.messes[idx];
         document.getElementById('content').innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <button class="btn" onclick="showView('planner')"><i class="fas fa-arrow-left"></i> Retour</button>
-                <h3 style="margin:0">${m.name}</h3>
-                <button class="btn btn-accent" onclick="deleteMesse(${idx})"><i class="fas fa-trash"></i></button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px;">
+                <button class="btn btn-icon-only" onclick="showView('planner')"><i class="fas fa-chevron-left"></i></button>
+                <h3 style="margin:0; flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${m.name}</h3>
+                <button class="btn btn-accent btn-icon-only" onclick="deleteMesse(${idx})"><i class="fas fa-trash"></i></button>
             </div>
-            
+
             <div class="editor-grid">
                 <div class="col">
-                    <input type="text" class="search-bar" style="margin:0" placeholder="Chercher un PDF à ajouter..." oninput="filterEditor(this.value)">
+                    <div class="col-title"><i class="fas fa-book"></i> Bibliothèque</div>
+                    <input type="text" class="search-bar" style="margin:0 0 10px 0" placeholder="🔍 Chercher un PDF..." oninput="filterEditor(this.value)">
                     <div id="editor-lib" class="list-box">${renderEditorList(state.songs)}</div>
                 </div>
-                
+
                 <div class="col">
+                    <div class="col-title"><i class="fas fa-list-ol"></i> Déroulé de la messe</div>
                     <div class="note-form">
                         <input type="text" id="note-title" class="input-field" placeholder="Titre (ex: PREMIÈRE LECTURE)">
                         <textarea id="note-content" class="input-field" placeholder="Contenu (texte, accords...)"></textarea>
                         <button class="btn btn-primary" style="width:100%" onclick="addNote()"><i class="fas fa-plus"></i> Ajouter cette note</button>
                     </div>
-                    
+
                     <div id="messe-sortable" class="list-box" style="margin-top:0">
                         ${m.songs.map((s, i) => `
                             <div class="item ${s.type === 'note' ? 'item-note' : ''}" data-id="${i}">
-                                <i class="fas ${s.type === 'note' ? 'fa-align-left' : 'fa-file-pdf'}" style="color:#888; cursor:grab;"></i> 
-                                <span style="flex:1; font-weight:500;">${s.name}</span>
-                                <button class="btn" style="padding: 8px; background:transparent; color:#ff1744;" onclick="removeSongFromMesse(${i})">
+                                <i class="fas ${s.type === 'note' ? 'fa-align-left' : 'fa-file-pdf'} drag-handle"></i>
+                                <span>${s.name}</span>
+                                <button class="remove-btn" onclick="removeSongFromMesse(${i})">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>`).join('')}
                     </div>
                 </div>
             </div>`;
-        
+
         new Sortable(document.getElementById('messe-sortable'), {
-            animation: 150, handle: '.fa-file-pdf, .fa-align-left',
+            animation: 200,
+            handle: '.drag-handle',
+            delay: 80,
+            delayOnTouchOnly: true,
+            touchStartThreshold: 4,
             onEnd: (e) => {
                 const songs = state.messes[state.currentMesseIdx].songs;
                 songs.splice(e.newIndex, 0, songs.splice(e.oldIndex, 1)[0]);
                 saveMesses(); editMesse(state.currentMesseIdx);
+                vibrate(10);
             }
         });
     }
 
-    function renderEditorList(list) { return list.map(s => `<div class="item" onclick="addSongToMesse('${s.id}')"><i class="fas fa-plus" style="color:#2979ff"></i> ${s.name}</div>`).join(''); }
-    function filterEditor(query) { document.getElementById('editor-lib').innerHTML = renderEditorList(state.songs.filter(s => normalizeSearch(s.name).includes(normalizeSearch(query)))); }
-    
+    function renderEditorList(list) {
+        if (list.length === 0) return `<div class="empty-state" style="padding:30px;"><i class="fas fa-search"></i><span>Aucun résultat</span></div>`;
+        return list.map(s => `<div class="item" onclick="addSongToMesse('${s.id}')"><i class="fas fa-plus-circle" style="color:var(--primary-color)"></i> <span>${s.name}</span></div>`).join('');
+    }
+
+    function filterEditor(query) {
+        document.getElementById('editor-lib').innerHTML = renderEditorList(state.songs.filter(s => normalizeSearch(s.name).includes(normalizeSearch(query))));
+    }
+
     function addSongToMesse(id) {
         state.messes[state.currentMesseIdx].songs.push({...state.songs.find(x => x.id === id)});
         saveMesses(); editMesse(state.currentMesseIdx);
+        vibrate(10);
     }
 
     function addNote() {
@@ -466,48 +811,50 @@
         if (title) {
             state.messes[state.currentMesseIdx].songs.push({ type: 'note', name: title.toUpperCase(), content: content });
             saveMesses(); editMesse(state.currentMesseIdx);
-        } else alert("Veuillez donner au moins un titre à votre note.");
+            showToast("Note ajoutée");
+        } else showToast("Veuillez donner un titre", 'error');
     }
 
-    function removeSongFromMesse(i) { state.messes[state.currentMesseIdx].songs.splice(i, 1); saveMesses(); editMesse(state.currentMesseIdx); }
+    function removeSongFromMesse(i) {
+        state.messes[state.currentMesseIdx].songs.splice(i, 1);
+        saveMesses(); editMesse(state.currentMesseIdx);
+    }
+
     function saveMesses() { localStorage.setItem('cantus_messes', JSON.stringify(state.messes)); }
-    function deleteMesse(i) { if(confirm("Supprimer cette messe ?")) { state.messes.splice(i,1); saveMesses(); showView('planner'); } }
+
+    function deleteMesse(i) {
+        if(confirm("Supprimer cette messe ?")) { state.messes.splice(i,1); saveMesses(); showView('planner'); showToast("Messe supprimée"); }
+    }
 
     // --- SYSTÈME D'IMPORT / EXPORT ---
     function openExportModal(idx) {
         const messe = state.messes[idx];
         const jsonString = JSON.stringify(messe);
         const compressed = LZString.compressToEncodedURIComponent(jsonString);
-        
-        // On construit l'URL exacte actuelle en rajoutant le paramètre ?import=...
-        const baseUrl = window.location.href.split('?')[0]; 
+
+        const baseUrl = window.location.href.split('?')[0];
         const url = `${baseUrl}?import=${compressed}`;
 
         state.exportUrlCache = url;
         state.exportJsonCache = jsonString;
-        
+
         document.getElementById('export-title').innerText = `Export : ${messe.name}`;
         document.getElementById('export-modal').style.display = 'flex';
 
-        // Générer le QR Code (si l'URL est trop massive, il sera très dense, d'où l'intérêt du fichier json en backup)
         new QRious({
             element: document.getElementById('qr-code-img'),
             value: url,
-            size: 250,
-            level: 'L' // Low error correction to save space
+            size: 260,
+            level: 'L'
         });
     }
 
-    function closeModal() {
-        document.getElementById('export-modal').style.display = 'none';
-    }
+    function closeModal() { document.getElementById('export-modal').style.display = 'none'; }
 
     function copyExportLink() {
         navigator.clipboard.writeText(state.exportUrlCache).then(() => {
-            alert("Lien copié ! Vous pouvez le coller dans un message, mail, etc.");
-        }).catch(err => {
-            alert("Erreur lors de la copie du lien.");
-        });
+            showToast("Lien copié !");
+        }).catch(() => showToast("Erreur de copie", 'error'));
     }
 
     function downloadExportFile() {
@@ -517,6 +864,7 @@
         a.href = URL.createObjectURL(blob);
         a.download = `Cantus_${messeName.replace(/ /g, '_')}.json`;
         a.click();
+        showToast("Téléchargement lancé");
     }
 
     function handleFileImport(event) {
@@ -531,20 +879,31 @@
                     state.messes.push(importedMesse);
                     saveMesses();
                     showView('planner');
-                    alert(`La messe "${importedMesse.name}" a été importée via le fichier !`);
+                    showToast(`"${importedMesse.name}" importée !`);
                 } else {
-                    alert("Ce fichier JSON ne semble pas être une messe Cantus valide.");
+                    showToast("Fichier JSON invalide", 'error');
                 }
             } catch (err) {
-                alert("Erreur de lecture du fichier. Assurez-vous qu'il s'agit bien d'un fichier .json Cantus.");
+                showToast("Erreur de lecture du fichier", 'error');
             }
-            // Réinitialiser l'input
             event.target.value = '';
         };
         reader.readAsText(file);
     }
 
-    window.addEventListener('resize', () => { if(state.pdf && document.getElementById('performance-mode').style.display === 'flex') renderPage(); });
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if(state.pdf && document.getElementById('performance-mode').style.display === 'flex') renderPage();
+        }, 150);
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && document.getElementById('performance-mode').style.display === 'flex') {
+            // L'utilisateur a quitté le plein écran via le système
+        }
+    });
 
     init();
 </script>
