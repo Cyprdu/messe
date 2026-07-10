@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cantus Pro</title>
 
-    <script src="./Cantus Pro_files/pdf.min.js.téléchargement"></script>
-    <script src="./Cantus Pro_files/Sortable.min.js.téléchargement"></script>
-    <script src="./Cantus Pro_files/lz-string.min.js.téléchargement"></script>
-    <script src="./Cantus Pro_files/qrious.min.js.téléchargement"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
     <style>
         /* ─── SYSTÈME DE DESIGN ─── */
@@ -125,9 +126,7 @@
             padding: var(--sp-sm) var(--sp-lg);
             background: var(--surface);
             flex-shrink: 0;
-            overflow-x: auto;
         }
-        nav::-webkit-scrollbar { display: none; }
 
         .tab-btn {
             display: flex;
@@ -142,7 +141,6 @@
             font-weight: 500;
             cursor: pointer;
             transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-            white-space: nowrap;
         }
 
         .tab-btn:hover { background: var(--surface-2); color: var(--text); }
@@ -262,17 +260,12 @@
 
         .card:hover { border-color: var(--surface-3); background: var(--surface-2); }
 
-        /* Alignement à droite des boutons */
-        .card > div:first-child {
+        .card-content {
             flex: 1;
             min-width: 0;
-        }
-
-        .card-actions {
             display: flex;
-            align-items: center;
-            gap: var(--sp-sm);
-            flex-shrink: 0;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .card-title {
@@ -288,22 +281,6 @@
             font-size: 12px;
             color: var(--text-2);
             margin-top: 2px;
-        }
-
-        /* ─── BOUTON FAVORIS ─── */
-        .btn-fav {
-            color: var(--text-3);
-            transition: color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
-            padding: 8px;
-            min-width: auto;
-            min-height: auto;
-        }
-        .btn-fav.active {
-            color: var(--accent);
-        }
-        .btn-fav:hover {
-            color: var(--accent);
-            transform: scale(1.15);
         }
 
         .card-badge {
@@ -721,61 +698,61 @@
 <svg style="display:none" xmlns="http://www.w3.org/2000/svg">
     <defs>
         <symbol id="ico-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle>
+            <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
         </symbol>
         <symbol id="ico-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
         </symbol>
-        <symbol id="ico-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        <symbol id="ico-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
         </symbol>
-        <symbol id="ico-star-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        <symbol id="ico-heart-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
         </symbol>
         <symbol id="ico-play" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5,3 19,12 5,21"></polygon>
+            <polygon points="5,3 19,12 5,21"/>
         </symbol>
         <symbol id="ico-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </symbol>
         <symbol id="ico-grip" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="9" cy="6" r="1.4"></circle><circle cx="15" cy="6" r="1.4"></circle><circle cx="9" cy="12" r="1.4"></circle><circle cx="15" cy="12" r="1.4"></circle><circle cx="9" cy="18" r="1.4"></circle><circle cx="15" cy="18" r="1.4"></circle>
+            <circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>
         </symbol>
         <symbol id="ico-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
         </symbol>
         <symbol id="ico-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line>
+            <line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/>
         </symbol>
         <symbol id="ico-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </symbol>
         <symbol id="ico-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline>
+            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
         </symbol>
         <symbol id="ico-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
         </symbol>
         <symbol id="ico-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </symbol>
         <symbol id="ico-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
         </symbol>
         <symbol id="ico-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
         </symbol>
         <symbol id="ico-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
         </symbol>
         <symbol id="ico-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </symbol>
         <symbol id="ico-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
         </symbol>
         <symbol id="ico-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
+            <polyline points="20 6 9 17 4 12"/>
         </symbol>
     </defs>
 </svg>
@@ -783,75 +760,68 @@
 <div id="app">
     <header>
         <div class="brand">Cantus</div>
-        <div class="sync-badge online" id="sync-badge">
+        <div class="sync-badge" id="sync-badge">
             <span class="sync-dot"></span>
-            <span id="sync-text">À jour</span>
+            <span id="sync-text">Prêt</span>
         </div>
     </header>
 
     <nav>
-        <button class="tab-btn active" id="tab-library" onclick="showView('library')">
-            <svg class="icon"><use href="#ico-music"></use></svg>
+        <button class="tab-btn" id="tab-library" onclick="showView('library')">
+            <svg class="icon"><use href="#ico-music"/></svg>
             Bibliothèque
         </button>
         <button class="tab-btn" id="tab-favorites" onclick="showView('favorites')">
-            <svg class="icon"><use href="#ico-star"></use></svg>
+            <svg class="icon"><use href="#ico-heart"/></svg>
             Favoris
         </button>
         <button class="tab-btn" id="tab-planner" onclick="showView('planner')">
-            <svg class="icon"><use href="#ico-cal"></use></svg>
+            <svg class="icon"><use href="#ico-cal"/></svg>
             Messes
         </button>
     </nav>
 
-    <main id="content">
-        <div class="search-wrap">
-            <svg class="icon"><use href="#ico-search"></use></svg>
-            <input type="text" class="search-input" placeholder="Rechercher un chant…" oninput="searchLibrary(this.value)">
-        </div>
-        <div id="lib-list">
-            </div>
-    </main>
+    <main id="content"></main>
 </div>
 
 <input type="file" id="file-import" class="file-input-hidden" accept=".json" onchange="handleFileImport(event)">
 
-<div id="export-modal" class="">
+<div id="export-modal">
     <div class="modal-card">
-        <h3 id="export-title">5</h3>
+        <h3 id="export-title">Exporter</h3>
         <p>Scannez le QR Code ou copiez le lien sur la tablette cible.</p>
-        <canvas id="qr-code-img" height="220" width="220"></canvas>
+        <canvas id="qr-code-img"></canvas>
         <div class="modal-actions">
             <button class="btn btn-primary" onclick="copyExportLink()">
-                <svg class="icon"><use href="#ico-link"></use></svg>
+                <svg class="icon"><use href="#ico-link"/></svg>
                 Copier le lien
             </button>
             <button class="btn btn-ghost" onclick="downloadExportFile()">
-                <svg class="icon"><use href="#ico-download"></use></svg>
+                <svg class="icon"><use href="#ico-download"/></svg>
                 Télécharger .json
             </button>
             <button class="btn btn-ghost" onclick="closeModal()">
-                <svg class="icon"><use href="#ico-x"></use></svg>
+                <svg class="icon"><use href="#ico-x"/></svg>
                 Fermer
             </button>
         </div>
     </div>
 </div>
 
-<div id="performance-mode" style="display: none;">
-    <div id="pdf-viewport" style="display: flex;">
-        <div class="tap-zone tap-left" onclick="prevPage(event)"></div>
+<div id="performance-mode">
+    <div id="pdf-viewport">
+        <div class="tap-zone tap-left"  onclick="prevPage(event)"></div>
         <div class="tap-zone tap-right" onclick="nextPage(event)"></div>
-        <canvas id="pdf-canvas" width="529" height="897" style="display: block; width: 529.032px; height: 897.75px;"></canvas>
+        <canvas id="pdf-canvas"></canvas>
         <div id="text-display">
             <div id="note-title-display"></div>
             <div id="note-content-display"></div>
         </div>
     </div>
     <div id="perf-hud">
-        <span id="perf-hud-title">C'EST AUPRÈS DE DIEU</span>
-        <span id="perf-hud-page">1 / 2</span>
-        <div id="perf-hud-bar"><div id="perf-hud-fill" style="width: 50%;"></div></div>
+        <span id="perf-hud-title"></span>
+        <span id="perf-hud-page"></span>
+        <div id="perf-hud-bar"><div id="perf-hud-fill"></div></div>
     </div>
 </div>
 
@@ -958,9 +928,9 @@
                 <div class="search-wrap">
                     <svg class="icon"><use href="#ico-search"/></svg>
                     <input type="text" class="search-input" placeholder="Rechercher un chant…"
-                           oninput="searchLibrary(this.value)">
+                           oninput="searchLibrary(this.value, 'library')">
                 </div>
-                <div id="lib-list">${renderList(state.songs)}</div>`;
+                <div id="lib-list">${renderList(state.songs, 'ico-music', 'Aucun chant trouvé.')}</div>`;
 
         } else if (v === 'favorites') {
             const favSongs = state.songs.filter(s => state.favorites.includes(s.id));
@@ -968,9 +938,9 @@
                 <div class="search-wrap">
                     <svg class="icon"><use href="#ico-search"/></svg>
                     <input type="text" class="search-input" placeholder="Rechercher dans les favoris…"
-                           oninput="searchFavorites(this.value)">
+                           oninput="searchLibrary(this.value, 'favorites')">
                 </div>
-                <div id="fav-list">${renderList(favSongs)}</div>`;
+                <div id="fav-list">${renderList(favSongs, 'ico-heart', "Vous n'avez pas encore de favoris.")}</div>`;
 
         } else if (v === 'planner') {
             c.innerHTML = `
@@ -987,19 +957,22 @@
         }
     }
 
-    function renderList(list) {
-        if (list.length === 0) return emptyState('ico-music', 'Aucun chant trouvé.');
+    function renderList(list, emptyIcon, emptyText) {
+        if (list.length === 0) return emptyState(emptyIcon, emptyText);
 
         return list.map(s => {
             const isFav = state.favorites.includes(s.id);
+            const favIco = isFav ? '#ico-heart-filled' : '#ico-heart';
+            const favColor = isFav ? 'color: var(--danger);' : '';
+
             return `
             <div class="card">
-                <div>
+                <div class="card-content">
                     <div class="card-title">${escHtml(s.name)}</div>
                 </div>
-                <div class="card-actions">
-                    <button class="btn btn-icon btn-fav ${isFav ? 'active' : ''}" onclick="toggleFavorite('${s.id}', event)" title="Favoris">
-                        <svg class="icon"><use href="${isFav ? '#ico-star-filled' : '#ico-star'}"/></svg>
+                <div style="display: flex; gap: var(--sp-xs); flex-shrink: 0; align-items: center;">
+                    <button class="btn btn-icon" style="${favColor}" onclick="toggleFavorite('${s.id}', event)" title="Favori">
+                        <svg class="icon"><use href="${favIco}"/></svg>
                     </button>
                     <button class="btn btn-primary" onclick="playSingle('${s.id}')" style="padding:9px 14px;">
                         <svg class="icon icon-sm"><use href="#ico-play"/></svg>
@@ -1041,12 +1014,12 @@
     }
 
     /* ══════════════════════════════════════════
-       FAVORIS
+       FAVORITES
     ══════════════════════════════════════════ */
-    function toggleFavorite(id, e) {
-        if (e) e.stopPropagation();
-        const idx = state.favorites.indexOf(id);
+    function toggleFavorite(id, event) {
+        if (event) event.stopPropagation();
         
+        const idx = state.favorites.indexOf(id);
         if (idx === -1) {
             state.favorites.push(id);
         } else {
@@ -1055,10 +1028,17 @@
         
         localStorage.setItem('cantus_favorites', JSON.stringify(state.favorites));
         
-        // Rafraîchir la vue actuelle pour mettre à jour les icônes
-        const activeTab = document.querySelector('.tab-btn.active').id.replace('tab-', '');
-        if (activeTab === 'library' || activeTab === 'favorites') {
-            showView(activeTab);
+        const activeTab = document.querySelector('.tab-btn.active').id;
+        
+        // Si on est dans l'onglet favoris, on rafraîchit la vue pour enlever la carte
+        if (activeTab === 'tab-favorites') {
+            showView('favorites');
+        } else {
+            // Sinon, on met à jour uniquement le bouton visuellement pour ne pas perdre la recherche en cours
+            const btn = event.currentTarget;
+            const isFav = state.favorites.includes(id);
+            btn.style.color = isFav ? 'var(--danger)' : '';
+            btn.innerHTML = `<svg class="icon"><use href="${isFav ? '#ico-heart-filled' : '#ico-heart'}"/></svg>`;
         }
     }
 
@@ -1075,16 +1055,20 @@
             .replace(/\s+/g, ' ').trim();
     }
 
-    function searchLibrary(query) {
+    function searchLibrary(query, targetListStr) {
         const q = normalizeSearch(query);
-        const filtered = state.songs.filter(s => normalizeSearch(s.name).includes(q));
-        document.getElementById('lib-list').innerHTML = renderList(filtered);
-    }
+        let sourceList = state.songs;
+        let icon = 'ico-music';
+        let emptyTxt = 'Aucun chant trouvé.';
 
-    function searchFavorites(query) {
-        const q = normalizeSearch(query);
-        const favSongs = state.songs.filter(s => state.favorites.includes(s.id) && normalizeSearch(s.name).includes(q));
-        document.getElementById('fav-list').innerHTML = renderList(favSongs);
+        if (targetListStr === 'favorites') {
+            sourceList = state.songs.filter(s => state.favorites.includes(s.id));
+            icon = 'ico-heart';
+            emptyTxt = "Aucun favori ne correspond à votre recherche.";
+        }
+        
+        const filtered = sourceList.filter(s => normalizeSearch(s.name).includes(q));
+        document.getElementById(targetListStr === 'favorites' ? 'fav-list' : 'lib-list').innerHTML = renderList(filtered, icon, emptyTxt);
     }
 
     /* ══════════════════════════════════════════
@@ -1231,6 +1215,7 @@
     let hudVisible       = false;
 
     function handleCenterTap(e) {
+        // Ignore taps on PDF-canvas itself (PDF pages are not centered tap targets)
         const target = e.target;
         if (target.closest('#pdf-canvas')) return;
 
@@ -1528,5 +1513,5 @@
     ══════════════════════════════════════════ */
     init();
 </script>
-
-</body></html>
+</body>
+</html>
